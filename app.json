@@ -1,19 +1,10 @@
 {
   "name": "WhatsApp Crash Suite",
-  "description": "🔥 Ultimate WhatsApp Crash Testing Platform v4.0",
-  "repository": "https://github.com/msarim21/bugbot007",
-  "logo": "https://raw.githubusercontent.com/msarim21/bugbot007/main/logo.png",
-  "keywords": [
-    "whatsapp",
-    "crash",
-    "security",
-    "testing",
-    "nodejs",
-    "express"
-  ],
+  "description": "🔥 Real WhatsApp Crash Suite with Baileys",
+  "repository": "https://github.com/yourusername/whatsapp-crash-suite",
+  "keywords": ["whatsapp", "crash", "baileys", "security"],
   "env": {
     "NODE_ENV": {
-      "description": "Environment",
       "value": "production"
     }
   },
