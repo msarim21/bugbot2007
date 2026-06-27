@@ -519,6 +519,11 @@
     socket.on('error', (data) => {
         showToast('❌ ' + data.message, 'error');
         addLog('❌ ' + data.message, 'error');
+        // Reset pair button so user can retry
+        dom.pairBtn.innerHTML = '🔑 Get Pairing Code';
+        dom.pairBtn.disabled = false;
+        dom.connectionStatus.textContent = '❌ ' + data.message;
+        dom.connectionStatus.style.color = '#e74c3c';
     });
 
     // Fix 3: Auto-reconnect events
