@@ -497,6 +497,37 @@ app.get('/api/session', async (req, res) => {
     }
 });
 
+// ── Session restore from UI (paste SESSION_DATA string directly) ──────────────
+app.post('/api/session/restore', async (req, res) => {
+    const { session } = req.body;
+    if (!session) return res.status(400).json({ success: false, error: 'session string required' });
+    try {
+        const parsed = JSON.parse(Buffer.from(session, 'base64').toString('utf8'));
+        if (mongoReady && Array.isArray(parsed)) {
+            await AuthKey.deleteMany({});
+            for (const doc of parsed) {
+                await AuthKey.updateOne({ _id: doc._id }, { $set: { data: doc.data } }, { upsert: true });
+            }
+            console.log(`✅ Session restored via UI (${parsed.length} keys)`);
+            res.json({ success: true, message: `Session restored (${parsed.length} keys) — click Get Pairing Code to reconnect` });
+        } else if (!mongoReady && typeof parsed === 'object') {
+            const fs = require('fs');
+            const authDir = 'auth_info_baileys';
+            if (fs.existsSync(authDir)) fs.rmSync(authDir, { recursive: true, force: true });
+            fs.mkdirSync(authDir, { recursive: true });
+            for (const [filename, content] of Object.entries(parsed)) {
+                fs.writeFileSync(require('path').join(authDir, filename), content);
+            }
+            console.log(`✅ Session restored via UI (${Object.keys(parsed).length} files)`);
+            res.json({ success: true, message: `Session restored (${Object.keys(parsed).length} files) — click Get Pairing Code to reconnect` });
+        } else {
+            res.status(400).json({ success: false, error: 'Invalid session format' });
+        }
+    } catch (e) {
+        res.status(400).json({ success: false, error: 'Invalid session string — ' + e.message });
+    }
+});
+
 // ── Logs & Metrics ────────────────────────────────────────────────────────────
 app.get('/api/logs', (req, res) => {
     res.json({ success: true, logs: crashLogs.slice(0, 100) });
