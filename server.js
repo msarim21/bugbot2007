@@ -1,9 +1,54 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const socketIo = require('socket.io');
 const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+
+// ============================================================
+// 💾 SESSION PERSISTENCE (Heroku ephemeral disk fix)
+// ============================================================
+// On Heroku, disk resets every restart. We encode the whole
+// auth_info_baileys/ folder as base64 JSON so users can copy
+// it, set SESSION_DATA env var, and survive restarts.
+
+const AUTH_FOLDER = 'auth_info_baileys';
+
+function restoreSessionFromEnv() {
+    const raw = process.env.SESSION_DATA;
+    if (!raw) return false;
+    try {
+        const files = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+        if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+        for (const [name, content] of Object.entries(files)) {
+            fs.writeFileSync(path.join(AUTH_FOLDER, name), content, 'utf8');
+        }
+        console.log(`✅ Session restored from SESSION_DATA env var (${Object.keys(files).length} files)`);
+        return true;
+    } catch (e) {
+        console.warn('⚠️  SESSION_DATA restore failed:', e.message);
+        return false;
+    }
+}
+
+function exportSession() {
+    try {
+        if (!fs.existsSync(AUTH_FOLDER)) return null;
+        const files = {};
+        for (const f of fs.readdirSync(AUTH_FOLDER)) {
+            const fp = path.join(AUTH_FOLDER, f);
+            if (fs.statSync(fp).isFile()) files[f] = fs.readFileSync(fp, 'utf8');
+        }
+        if (!Object.keys(files).length) return null;
+        return Buffer.from(JSON.stringify(files)).toString('base64');
+    } catch (e) {
+        return null;
+    }
+}
+
+// Restore session on startup (before server starts)
+restoreSessionFromEnv();
 
 const app = express();
 const server = http.createServer(app);
@@ -294,6 +339,17 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Fix 4: cancel_pair — kill zombie connection when frontend times out
+    socket.on('cancel_pair', () => {
+        if (sock && !isConnected) {
+            try { sock.end(); } catch (_) {}
+            sock = null;
+            currentPairingCode = null;
+            connectionStatus = 'offline';
+            console.log('🚫 Pairing cancelled by client');
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('🔌 Client disconnected:', socket.id);
     });
@@ -383,6 +439,34 @@ app.post('/api/crash', async (req, res) => {
         console.error('Crash error:', error);
         saveCrashLog(target, 'failed', vector, error.message);
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Fix 1: Disconnect route — frontend calls this, was missing
+app.post('/api/disconnect', (req, res) => {
+    try {
+        if (sock) {
+            try { sock.end(); } catch (_) {}
+            sock = null;
+        }
+        isConnected = false;
+        currentPairingCode = null;
+        currentPhoneNumber = null;
+        connectionStatus = 'offline';
+        io.emit('status_update', { status: 'offline' });
+        res.json({ success: true, message: 'Disconnected' });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Fix 2: Session export — copy the base64 string and set as SESSION_DATA on Heroku
+app.get('/api/session', (req, res) => {
+    const session = exportSession();
+    if (session) {
+        res.json({ success: true, session, instructions: 'Set SESSION_DATA=<session> on Heroku to survive restarts' });
+    } else {
+        res.json({ success: false, message: 'No active session — pair first' });
     }
 });
 
