@@ -439,6 +439,9 @@
             dom.pairingDisplay.style.display = 'block';
             dom.connectionStatus.textContent = `📱 Code: ${data.code} — Enter in WhatsApp`;
             dom.connectionStatus.style.color = '#f5a623';
+            // Reset button so user can re-pair if needed
+            dom.pairBtn.innerHTML = '🔑 Get Pairing Code';
+            dom.pairBtn.disabled = false;
             addLog(`📱 Pairing code generated: ${data.code}`, 'info');
             showToast(`📱 Code: ${data.code}`, 'info', 8000);
         }
@@ -465,13 +468,15 @@
                 dom.connectionStatus.style.color = '#f5a623';
                 addLog(`📱 Pairing code: ${data.pairingCode}`, 'info');
             }
-        } else if (data.status === 'offline') {
+        } else if (data.status === 'offline' || data.status === 'disconnected') {
             state.connected = false;
             dom.connectionStatus.textContent = '⏳ Disconnected';
             dom.connectionStatus.style.color = '#888';
             dom.pairingDisplay.style.display = 'none';
             dom.targetInput.disabled = true;
             dom.setTargetBtn.disabled = true;
+            dom.pairBtn.innerHTML = '🔑 Get Pairing Code';
+            dom.pairBtn.disabled = false;
             updateUI();
         }
     });
