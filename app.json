@@ -1,11 +1,15 @@
 {
   "name": "WhatsApp Crash Suite",
   "description": "🔥 Real WhatsApp Crash Suite with Pairing Code",
-  "repository": "https://github.com/yourusername/whatsapp-crash-suite",
+  "repository": "https://github.com/msarim21/bugbot2007",
   "keywords": ["whatsapp", "crash", "baileys", "pairing"],
   "env": {
     "NODE_ENV": {
       "value": "production"
+    },
+    "MONGO_URL": {
+      "description": "MongoDB connection string (e.g. mongodb+srv://user:pass@cluster.mongodb.net/dbname) — required for session persistence across restarts",
+      "required": true
     }
   },
   "buildpacks": [
