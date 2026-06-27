@@ -217,21 +217,35 @@
         <div id="numbersList" style="font-size:13px; color:#666;">Loading...</div>
     </div>
 
-    <!-- Session Backup (Fix 2: Heroku session persistence) -->
+    <!-- Session Backup & Restore -->
     <div class="section" id="sessionSection">
         <div class="section-title">
-            💾 Session Backup
+            💾 Session Backup &amp; Restore
             <span class="badge">Heroku Restart Fix</span>
         </div>
-        <div style="font-size:12px; color:#666; margin-bottom:12px;">
-            Heroku disk resets on restart — copy this session string, set it as <code style="color:#25d366;background:rgba(37,211,102,0.08);padding:2px 6px;border-radius:4px;">SESSION_DATA</code> config var on Heroku to avoid re-pairing.
+
+        <!-- Export -->
+        <div style="font-size:12px; color:#666; margin-bottom:10px;">
+            <strong style="color:#aaa;">📤 Export</strong> — Pair karne ke baad session copy karo, dobara pair karne ki zaroorat nahi.
         </div>
-        <div class="row">
+        <div class="row" style="margin-bottom:12px;">
             <button class="btn btn-outline btn-sm" id="exportSessionBtn">📋 Copy Session String</button>
             <span id="sessionCopyStatus" style="font-size:12px;color:#666;"></span>
         </div>
-        <div id="sessionStringWrap" style="display:none;margin-top:12px;">
-            <textarea id="sessionStringBox" readonly style="width:100%;height:80px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);border-radius:10px;color:#888;font-size:10px;padding:10px;font-family:monospace;resize:none;outline:none;"></textarea>
+        <div id="sessionStringWrap" style="display:none;margin-bottom:14px;">
+            <textarea id="sessionStringBox" readonly style="width:100%;height:70px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);border-radius:10px;color:#888;font-size:10px;padding:10px;font-family:monospace;resize:none;outline:none;"></textarea>
+        </div>
+
+        <!-- Restore -->
+        <div style="border-top:1px solid rgba(255,255,255,0.04);padding-top:14px;">
+            <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                <strong style="color:#aaa;">📥 Restore</strong> — Pehle ki copied session string paste karo — re-pairing ke baghair directly connect ho jayega.
+            </div>
+            <textarea id="restoreSessionBox" placeholder="Pehle exported session string yahan paste karo..." style="width:100%;height:70px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);border-radius:10px;color:#e0e0e0;font-size:10px;padding:10px;font-family:monospace;resize:none;outline:none;margin-bottom:10px;"></textarea>
+            <div class="row">
+                <button class="btn btn-primary btn-sm" id="restoreSessionBtn">🔄 Restore Session</button>
+                <span id="restoreSessionStatus" style="font-size:12px;color:#666;"></span>
+            </div>
         </div>
     </div>
 
@@ -794,6 +808,38 @@
 
         document.getElementById('refreshNumbersBtn').addEventListener('click', loadNumbers);
         loadNumbers();
+
+        // Session restore button
+        document.getElementById('restoreSessionBtn').addEventListener('click', async () => {
+            const sessionStr = document.getElementById('restoreSessionBox').value.trim();
+            const statusEl   = document.getElementById('restoreSessionStatus');
+            if (!sessionStr) { showToast('⚠️ Session string paste karo pehle', 'warning'); return; }
+            const btn = document.getElementById('restoreSessionBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Restoring...';
+            statusEl.textContent = '';
+            try {
+                const r = await apiCall('/api/session/restore', 'POST', { session: sessionStr });
+                if (r.success) {
+                    statusEl.textContent = '✅ ' + r.message;
+                    statusEl.style.color = '#25d366';
+                    document.getElementById('restoreSessionBox').value = '';
+                    showToast('✅ Session restore ho gayi! Pairing code lao.', 'success', 6000);
+                    addLog('✅ Session restored from string', 'success');
+                } else {
+                    statusEl.textContent = '❌ ' + (r.error || 'Restore failed');
+                    statusEl.style.color = '#e74c3c';
+                    showToast('❌ Restore failed: ' + (r.error || ''), 'error');
+                }
+            } catch(e) {
+                statusEl.textContent = '❌ Error: ' + e.message;
+                statusEl.style.color = '#e74c3c';
+                showToast('❌ Error: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Restore Session';
+            }
+        });
 
         // Fix 2: Session export button
         document.getElementById('exportSessionBtn').addEventListener('click', async () => {
