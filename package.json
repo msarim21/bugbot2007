@@ -1,7 +1,7 @@
 {
   "name": "whatsapp-crash-suite",
   "version": "4.0.0",
-  "description": "🔥 Real WhatsApp Crash Suite with Baileys",
+  "description": "🔥 Real WhatsApp Crash Suite with Pairing Code",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -13,7 +13,7 @@
     "express": "^4.18.2",
     "@whiskeysockets/baileys": "^6.6.0",
     "@hapi/boom": "^10.0.1",
-    "qrcode": "^1.5.3",
-    "pino": "^8.17.2"
+    "pino": "^8.17.2",
+    "socket.io": "^4.7.2"
   }
 }
