@@ -1,0 +1,27 @@
+{
+  "name": "whatsapp-crash-suite",
+  "version": "4.0.0",
+  "description": "🔥 Ultimate WhatsApp Crash Suite — Heavy Edition",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "heroku-postbuild": "echo '✅ Build complete'"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "compression": "^1.7.4",
+    "express-rate-limit": "^7.1.5",
+    "uuid": "^9.0.1",
+    "axios": "^1.6.2",
+    "qrcode": "^1.5.3",
+    "whatsapp-web.js": "1.23.0",
+    "puppeteer": "^21.6.1"
+  }
+}
