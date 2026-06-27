@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔥 WhatsApp Crash Suite v4.0</title>
+    <style>
+        /* --- All CSS from the previous answer (copy it) --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; display: flex; justify-content: center; padding: 20px; }
+        .container { max-width: 1100px; width: 100%; background: rgba(18, 22, 30, 0.95); backdrop-filter: blur(24px); border: 1px solid rgba(37, 211, 102, 0.12); border-radius: 32px; padding: 32px 40px 40px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8); position: relative; }
+        .container::before { content: ''; position: absolute; inset: -1px; border-radius: 32px; padding: 1px; background: linear-gradient(135deg, rgba(37, 211, 102, 0.15), transparent 50%); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+        .header { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+        .logo-icon { width: 48px; height: 48px; background: linear-gradient(135deg, #25d366, #128c7e); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: #fff; box-shadow: 0 4px 16px rgba(37, 211, 102, 0.3); flex-shrink: 0; }
+        .header-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+        .header-title span { color: #25d366; }
+        .header-badge { margin-left: auto; font-size: 11px; padding: 4px 14px; border-radius: 100px; background: rgba(37, 211, 102, 0.12); color: #25d366; border: 1px solid rgba(37, 211, 102, 0.12); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .header-status { font-size: 12px; color: #666; display: flex; align-items: center; gap: 8px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .status-dot.online { background: #25d366; box-shadow: 0 0 12px rgba(37, 211, 102, 0.4); }
+        .status-dot.offline { background: #e74c3c; box-shadow: 0 0 12px rgba(231, 76, 60, 0.4); }
+        .status-dot.connecting { background: #f5a623; animation: pulse-dot 0.8s ease-in-out infinite; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+        .section { margin-bottom: 24px; background: rgba(255, 255, 255, 0.02); border-radius: 16px; padding: 20px 24px; border: 1px solid rgba(255, 255, 255, 0.04); }
+        .section-title { font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+        .section-title .badge { font-size: 10px; background: rgba(37, 211, 102, 0.08); color: #25d366; padding: 2px 10px; border-radius: 100px; font-weight: 400; text-transform: none; }
+        .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+        .row .input-wrap { flex: 1; min-width: 180px; }
+        .row input, .row select { width: 100%; padding: 12px 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; color: #f0f0f0; font-size: 15px; transition: all 0.25s ease; outline: none; font-family: inherit; }
+        .row input:focus, .row select:focus { border-color: #25d366; background: rgba(255, 255, 255, 0.07); box-shadow: 0 0 0 4px rgba(37, 211, 102, 0.06); }
+        .row input::placeholder { color: #555; }
+        .row input:disabled, .row select:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn { padding: 12px 28px; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1); display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-family: inherit; }
+        .btn-primary { background: linear-gradient(135deg, #25d366, #128c7e); color: #fff; box-shadow: 0 4px 16px rgba(37, 211, 102, 0.2); }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(37, 211, 102, 0.35); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-danger { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; box-shadow: 0 4px 16px rgba(231, 76, 60, 0.2); }
+        .btn-danger:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(231, 76, 60, 0.35); }
+        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-outline { background: transparent; color: #ccc; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .btn-outline:hover:not(:disabled) { background: rgba(255, 255, 255, 0.04); color: #fff; }
+        .btn-sm { padding: 6px 16px; font-size: 12px; border-radius: 8px; }
+        .btn-block { width: 100%; justify-content: center; }
+        .vectors-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 4px; }
+        .vector-card { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 12px; padding: 14px 16px; cursor: pointer; transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1); position: relative; user-select: none; }
+        .vector-card:hover:not(.selected):not(.disabled) { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.08); transform: translateY(-2px); }
+        .vector-card.selected { border-color: #25d366; background: rgba(37, 211, 102, 0.06); box-shadow: 0 0 20px rgba(37, 211, 102, 0.04); }
+        .vector-card.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+        .vector-card .v-icon { font-size: 20px; display: block; margin-bottom: 4px; }
+        .vector-card .v-name { font-size: 13px; font-weight: 500; color: #e8e8e8; }
+        .vector-card .v-desc { font-size: 11px; color: #777; line-height: 1.3; margin-top: 2px; }
+        .vector-card .v-badge { position: absolute; top: 8px; right: 10px; font-size: 8px; padding: 1px 8px; border-radius: 100px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+        .v-badge.danger { background: rgba(231, 76, 60, 0.12); color: #e74c3c; }
+        .v-badge.invisible { background: rgba(155, 89, 182, 0.12); color: #9b59b6; }
+        .v-badge.group { background: rgba(52, 152, 219, 0.12); color: #3498db; }
+        .vector-card .v-check { display: none; position: absolute; bottom: 8px; right: 10px; font-size: 14px; color: #25d366; }
+        .vector-card.selected .v-check { display: block; }
+        .log-container { max-height: 150px; overflow-y: auto; background: rgba(0, 0, 0, 0.25); border-radius: 10px; padding: 10px 14px; font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; line-height: 1.8; border: 1px solid rgba(255, 255, 255, 0.03); }
+        .log-container::-webkit-scrollbar { width: 4px; }
+        .log-container::-webkit-scrollbar-track { background: transparent; }
+        .log-container::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 10px; }
+        .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.02); }
+        .log-entry:last-child { border-bottom: none; }
+        .log-entry .log-time { color: #444; margin-right: 8px; }
+        .log-entry .log-msg { color: #aaa; }
+        .log-entry.success .log-msg { color: #25d366; }
+        .log-entry.error .log-msg { color: #e74c3c; }
+        .log-entry.warning .log-msg { color: #f5a623; }
+        .log-empty { color: #444; font-style: italic; padding: 8px 0; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+        .metric-card { background: rgba(255, 255, 255, 0.02); border-radius: 10px; padding: 12px 16px; text-align: center; border: 1px solid rgba(255, 255, 255, 0.03); }
+        .metric-card .m-value { font-size: 24px; font-weight: 700; color: #f0f0f0; }
+        .metric-card .m-label { font-size: 11px; color: #666; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .metric-card .m-value.green { color: #25d366; }
+        .metric-card .m-value.red { color: #e74c3c; }
+        .metric-card .m-value.orange { color: #f5a623; }
+        .target-display { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: rgba(37, 211, 102, 0.04); border-radius: 10px; border: 1px solid rgba(37, 211, 102, 0.06); }
+        .target-display .label { font-size: 12px; color: #666; }
+        .target-display .value { font-size: 15px; font-weight: 500; color: #f5a623; font-family: 'SF Mono', monospace; }
+        .target-display .type { font-size: 10px; background: rgba(52, 152, 219, 0.08); color: #3498db; padding: 2px 10px; border-radius: 100px; text-transform: uppercase; }
+        .toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; max-width: 420px; width: 100%; }
+        .toast { padding: 14px 20px; border-radius: 14px; background: rgba(18, 22, 30, 0.96); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); font-size: 14px; color: #e0e0e0; animation: slideIn 0.4s cubic-bezier(0.22, 1, 0.36, 1); display: flex; align-items: center; gap: 12px; }
+        .toast.success { border-left: 3px solid #25d366; }
+        .toast.error { border-left: 3px solid #e74c3c; }
+        .toast.warning { border-left: 3px solid #f5a623; }
+        .toast.info { border-left: 3px solid #3498db; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+        .toast .toast-icon { font-size: 18px; flex-shrink: 0; }
+        .toast .toast-msg { flex: 1; word-break: break-word; }
+        .toast .toast-close { cursor: pointer; opacity: 0.4; font-size: 16px; background: none; border: none; color: #fff; padding: 4px; transition: opacity 0.2s; }
+        .toast .toast-close:hover { opacity: 1; }
+        @media (max-width: 768px) { .container { padding: 20px; } .header { flex-wrap: wrap; } .header-badge { margin-left: 0; } .row { flex-direction: column; } .row .input-wrap { min-width: 100%; } .btn { width: 100%; justify-content: center; } .vectors-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } .metrics-grid { grid-template-columns: repeat(2, 1fr); } .toast-container { right: 16px; left: 16px; max-width: 100%; bottom: 16px; } }
+        @media (max-width: 480px) { .vectors-grid { grid-template-columns: 1fr 1fr; } .section { padding: 14px 16px; } }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.08); }
+        .mt-2 { margin-top: 12px; }
+        .mb-2 { margin-bottom: 12px; }
+        .flex { display: flex; }
+        .flex-center { display: flex; align-items: center; gap: 10px; }
+        .gap-2 { gap: 10px; }
+        .text-muted { color: #666; font-size: 13px; }
+        .text-center { text-align: center; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.1); border-top: 2px solid #25d366; border-radius: 50%; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state { text-align: center; padding: 20px 0; color: #444; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-icon">⚡</div>
+            <div class="header-title">Crash<span>Suite</span></div>
+            <div class="header-badge">v4.0 · Heavy</div>
+            <div class="header-status">
+                <span class="status-dot online" id="statusDot"></span>
+                <span id="statusText">Online</span>
+            </div>
+        </div>
+
+        <!-- Connect Section -->
+        <div class="section">
+            <div class="section-title">
+                📱 WhatsApp Connection
+                <span class="badge" id="connectionBadge">Disconnected</span>
+            </div>
+            <div class="row">
+                <div class="input-wrap">
+                    <input type="text" id="phoneInput" placeholder="+92 300 1234567" value="">
+                </div>
+                <button class="btn btn-primary" id="connectBtn">🔗 Connect</button>
+                <button class="btn btn-outline" id="disconnectBtn" style="display:none;">⛔ Disconnect</button>
+            </div>
+            <div id="sessionDisplay" style="display:none; margin-top:12px; font-size:13px; color:#666;">
+                <span>Session: </span><span id="sessionIdDisplay" style="color:#25d366; font-family:monospace;"></span>
+                <span style="margin-left:16px;">📞 </span><span id="phoneDisplay" style="color:#f0f0f0;"></span>
+            </div>
+        </div>
+
+        <!-- Target Section -->
+        <div class="section" id="targetSection">
+            <div class="section-title">
+                🎯 Target Control
+                <span class="badge" id="targetBadge">Not Set</span>
+            </div>
+            <div class="row">
+                <div class="input-wrap">
+                    <input type="text" id="targetInput" placeholder="+92 300 9876543 (or group invite link)" value="">
+                </div>
+                <button class="btn btn-primary" id="setTargetBtn">🎯 Set Target</button>
+                <button class="btn btn-outline" id="clearTargetBtn" style="display:none;">✕ Clear</button>
+            </div>
+            <div id="targetDisplay" style="display:none; margin-top:12px;">
+                <div class="target-display">
+                    <span class="label">Current Target:</span>
+                    <span class="value" id="targetValue">—</span>
+                    <span class="type" id="targetTypeBadge">individual</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vectors Section -->
+        <div class="section" id="vectorsSection">
+            <div class="section-title">
+                💀 Crash Vectors
+                <span class="badge" id="vectorCount">0 loaded</span>
+                <span style="margin-left:auto; font-size:11px; color:#444; font-weight:400;">
+                    <span id="selectedVectorName">None selected</span>
+                </span>
+            </div>
+            <div class="vectors-grid" id="vectorsGrid">
+                <!-- Rendered by JS -->
+            </div>
+            <div style="margin-top:16px; display:flex; gap:12px; flex-wrap:wrap;">
+                <button class="btn btn-danger" id="executeBtn" disabled style="flex:1; min-width:150px;">
+                    💀 Execute Crash
+                </button>
+                <button class="btn btn-outline btn-sm" id="refreshVectorsBtn">🔄 Refresh</button>
+            </div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="section">
+            <div class="section-title">📊 Metrics</div>
+            <div class="metrics-grid" id="metricsGrid">
+                <div class="metric-card">
+                    <div class="m-value" id="metricTotal">0</div>
+                    <div class="m-label">Total Crashes</div>
+                </div>
+                <div class="metric-card">
+                    <div class="m-value green" id="metricSuccess">0</div>
+                    <div class="m-label">Successful</div>
+                </div>
+                <div class="metric-card">
+                    <div class="m-value red" id="metricFailed">0</div>
+                    <div class="m-label">Failed</div>
+                </div>
+                <div class="metric-card">
+                    <div class="m-value orange" id="metricRate">0%</div>
+                    <div class="m-label">Success Rate</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="section">
+            <div class="section-title">
+                📋 Activity Log
+                <span class="badge" id="logCount">0 entries</span>
+                <button class="btn btn-outline btn-sm" id="clearLogsBtn" style="margin-left:auto;">Clear</button>
+            </div>
+            <div class="log-container" id="logContainer">
+                <div class="log-empty">— No activity yet —</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.03); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:11px; color:#333;">
+            <span>🔥 WhatsApp Crash Suite v4.0</span>
+            <span>🔒 Project NORTHGATE · STW-2026-Q2-0438</span>
+            <span>💀 <span id="crashCountDisplay">0</span> victims</span>
+        </div>
+
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // API_BASE is empty because frontend served from same origin
+            const API_BASE = '';
+
+            // --- State ---
+            const state = {
+                sessionId: null,
+                phoneNumber: null,
+                target: null,
+                targetType: 'individual',
+                selectedVector: null,
+                vectors: [],
+                logs: [],
+                metrics: { total: 0, success: 0, failed: 0, successRate: '0%' },
+                isConnected: false,
+                isExecuting: false,
+                crashCount: 0
+            };
+
+            // --- DOM Refs ---
+            const $ = (sel) => document.querySelector(sel);
+            const dom = {
+                statusDot: $('#statusDot'),
+                statusText: $('#statusText'),
+                connectionBadge: $('#connectionBadge'),
+                phoneInput: $('#phoneInput'),
+                connectBtn: $('#connectBtn'),
+                disconnectBtn: $('#disconnectBtn'),
+                sessionDisplay: $('#sessionDisplay'),
+                sessionIdDisplay: $('#sessionIdDisplay'),
+                phoneDisplay: $('#phoneDisplay'),
+                targetInput: $('#targetInput'),
+                setTargetBtn: $('#setTargetBtn'),
+                clearTargetBtn: $('#clearTargetBtn'),
+                targetDisplay: $('#targetDisplay'),
+                targetValue: $('#targetValue'),
+                targetTypeBadge: $('#targetTypeBadge'),
+                targetBadge: $('#targetBadge'),
+                vectorsGrid: $('#vectorsGrid'),
+                vectorCount: $('#vectorCount'),
+                selectedVectorName: $('#selectedVectorName'),
+                executeBtn: $('#executeBtn'),
+                refreshVectorsBtn: $('#refreshVectorsBtn'),
+                metricTotal: $('#metricTotal'),
+                metricSuccess: $('#metricSuccess'),
+                metricFailed: $('#metricFailed'),
+                metricRate: $('#metricRate'),
+                logContainer: $('#logContainer'),
+                logCount: $('#logCount'),
+                clearLogsBtn: $('#clearLogsBtn'),
+                crashCountDisplay: $('#crashCountDisplay'),
+            };
+
+            // --- Toast ---
+            function showToast(message, type = 'info', duration = 5000) {
+                const container = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+                toast.innerHTML = `
+                    <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+                    <span class="toast-msg">${message}</span>
+                    <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+                `;
+                container.appendChild(toast);
+                if (duration > 0) {
+                    setTimeout(() => { if (toast.parentElement) toast.remove(); }, duration);
+                }
+                return toast;
+            }
+
+            // --- Logs ---
+            function addLog(message, type = 'info') {
+                const time = new Date().toLocaleTimeString();
+                state.logs.unshift({ time, message, type });
+                renderLogs();
+            }
+
+            function renderLogs() {
+                const container = dom.logContainer;
+                dom.logCount.textContent = `${state.logs.length} entries`;
+                if (state.logs.length === 0) {
+                    container.innerHTML = `<div class="log-empty">— No activity yet —</div>`;
+                    return;
+                }
+                const entries = state.logs.slice(0, 100);
+                container.innerHTML = entries.map(e => `
+                    <div class="log-entry ${e.type}">
+                        <span class="log-time">[${e.time}]</span>
+                        <span class="log-msg">${e.message}</span>
+                    </div>
+                `).join('');
+                container.scrollTop = 0;
+            }
+
+            // --- Metrics ---
+            function updateMetrics(metrics) {
+                if (metrics) state.metrics = metrics;
+                dom.metricTotal.textContent = state.metrics.total || 0;
+                dom.metricSuccess.textContent = state.metrics.success || 0;
+                dom.metricFailed.textContent = state.metrics.failed || 0;
+                dom.metricRate.textContent = state.metrics.successRate || '0%';
+                dom.crashCountDisplay.textContent = state.metrics.total || 0;
+            }
+
+            // --- API Call ---
+            async function apiCall(endpoint, method = 'GET', data = null) {
+                const url = `${API_BASE}${endpoint}`;
+                const options = { method, headers: { 'Content-Type': 'application/json' } };
+                if (data) options.body = JSON.stringify(data);
+                const response = await fetch(url, options);
+                return await response.json();
+            }
+
+            // --- Load Vectors ---
+            async function loadVectors() {
+                try {
+                    const result = await apiCall('/api/vectors');
+                    if (result.success) {
+                        state.vectors = result.vectors || [];
+                        renderVectors();
+                        dom.vectorCount.textContent = `${state.vectors.length} loaded`;
+                        addLog(`📋 Loaded ${state.vectors.length} crash vectors`, 'info');
+                    } else {
+                        showToast('❌ Failed to load vectors', 'error');
+                    }
+                } catch (error) {
+                    showToast('❌ Error loading vectors: ' + error.message, 'error');
+                    addLog(`❌ Error loading vectors: ${error.message}`, 'error');
+                }
+            }
+
+            function renderVectors() {
+                const grid = dom.vectorsGrid;
+                if (state.vectors.length === 0) {
+                    grid.innerHTML = `<div class="empty-state">No vectors available</div>`;
+                    return;
+                }
+                grid.innerHTML = state.vectors.map(v => `
+                    <div class="vector-card" data-id="${v.id}" data-name="${v.name}" data-type="${v.targetType}">
+                        <span class="v-badge ${v.badgeClass || 'danger'}">${v.badge || 'CRASH'}</span>
+                        <span class="v-icon">${v.icon || '💀'}</span>
+                        <div class="v-name">${v.name}</div>
+                        <div class="v-desc">${v.desc || ''}</div>
+                        <span class="v-check">✓</span>
+                    </div>
+                `).join('');
+                grid.querySelectorAll('.vector-card').forEach(card => {
+                    card.addEventListener('click', () => {
+                        const id = card.dataset.id;
+                        selectVector(id);
+                    });
+                });
+            }
+
+            function selectVector(id) {
+                document.querySelectorAll('.vector-card').forEach(c => c.classList.remove('selected'));
+                const selected = document.querySelector(`.vector-card[data-id="${id}"]`);
+                if (selected) {
+                    selected.classList.add('selected');
+                    state.selectedVector = id;
+                    dom.selectedVectorName.textContent = `Selected: ${selected.dataset.name}`;
+                    dom.executeBtn.disabled = false;
+                    addLog(`🎯 Selected vector: ${selected.dataset.name}`, 'info');
+                } else {
+                    state.selectedVector = null;
+                    dom.selectedVectorName.textContent = 'None selected';
+                    dom.executeBtn.disabled = true;
+                }
+            }
+
+            // --- Connect ---
+            async function handleConnect() {
+                const phone = dom.phoneInput.value.trim();
+                if (!phone) { showToast('⚠️ Please enter your WhatsApp number', 'warning'); return; }
+                dom.connectBtn.disabled = true;
+                dom.connectBtn.innerHTML = '<span class="spinner"></span> Connecting...';
+                try {
+                    const result = await apiCall('/api/connect', 'POST', { phoneNumber: phone });
+                    if (result.success) {
+                        state.sessionId = result.sessionId;
+                        state.phoneNumber = phone;
+                        state.isConnected = true;
+                        dom.sessionIdDisplay.textContent = result.sessionId;
+                        dom.phoneDisplay.textContent = phone;
+                        dom.sessionDisplay.style.display = 'block';
+                        dom.connectBtn.style.display = 'none';
+                        dom.disconnectBtn.style.display = 'inline-flex';
+                        dom.connectionBadge.textContent = '✅ Connected';
+                        dom.connectionBadge.style.color = '#25d366';
+                        dom.statusDot.className = 'status-dot online';
+                        dom.statusText.textContent = 'Online';
+                        addLog(`✅ Connected to ${phone} (Session: ${result.sessionId})`, 'success');
+                        showToast(`✅ Connected to ${phone}`, 'success');
+                        await loadMetrics();
+                        dom.setTargetBtn.disabled = false;
+                        dom.targetInput.disabled = false;
+                    } else {
+                        showToast(`❌ Connection failed: ${result.error || 'Unknown error'}`, 'error');
+                        addLog(`❌ Connection failed: ${result.error || 'Unknown error'}`, 'error');
+                    }
+                } catch (error) {
+                    showToast(`❌ Connection error: ${error.message}`, 'error');
+                    addLog(`❌ Connection error: ${error.message}`, 'error');
+                } finally {
+                    dom.connectBtn.disabled = false;
+                    dom.connectBtn.innerHTML = '🔗 Connect';
+                }
+            }
+
+            function handleDisconnect() {
+                state.sessionId = null;
+                state.phoneNumber = null;
+                state.isConnected = false;
+                state.target = null;
+                state.targetType = 'individual';
+                dom.sessionDisplay.style.display = 'none';
+                dom.connectBtn.style.display = 'inline-flex';
+                dom.disconnectBtn.style.display = 'none';
+                dom.connectionBadge.textContent = 'Disconnected';
+                dom.connectionBadge.style.color = '#666';
+                dom.statusDot.className = 'status-dot offline';
+                dom.statusText.textContent = 'Offline';
+                dom.targetDisplay.style.display = 'none';
+                dom.targetBadge.textContent = 'Not Set';
+                dom.setTargetBtn.disabled = true;
+                dom.targetInput.disabled = true;
+                dom.executeBtn.disabled = true;
+                dom.selectedVectorName.textContent = 'None selected';
+                dom.targetValue.textContent = '—';
+                dom.targetTypeBadge.textContent = 'individual';
+                addLog('🔌 Disconnected', 'info');
+                showToast('🔌 Disconnected', 'info');
+            }
+
+            // --- Set Target ---
+            async function handleSetTarget() {
+                const target = dom.targetInput.value.trim();
+                if (!target) { showToast('⚠️ Please enter a target number or group link', 'warning'); return; }
+                if (!state.sessionId) { showToast('⚠️ Connect to WhatsApp first', 'warning'); return; }
+                dom.setTargetBtn.disabled = true;
+                dom.setTargetBtn.innerHTML = '<span class="spinner"></span>';
+                try {
+                    const result = await apiCall('/api/target', 'POST', {
+                        sessionId: state.sessionId,
+                        target: target
+                    });
+                    if (result.success) {
+                        state.target = result.target;
+                        state.targetType = result.targetType;
+                        dom.targetValue.textContent = result.target;
+                        dom.targetTypeBadge.textContent = result.targetType;
+                        dom.targetDisplay.style.display = 'block';
+                        dom.targetBadge.textContent = `🎯 ${result.target}`;
+                        dom.targetBadge.style.color = '#f5a623';
+                        dom.clearTargetBtn.style.display = 'inline-flex';
+                        addLog(`🎯 Target set: ${result.target} (${result.targetType})`, 'success');
+                        showToast(`🎯 Target set: ${result.target}`, 'success');
+                        if (!state.selectedVector && state.vectors.length > 0) {
+                            selectVector(state.vectors[0].id);
+                        }
+                    } else {
+                        showToast(`❌ Failed to set target: ${result.error || 'Unknown error'}`, 'error');
+                        addLog(`❌ Failed to set target: ${result.error || 'Unknown error'}`, 'error');
+                    }
+                } catch (error) {
+                    showToast(`❌ Error: ${error.message}`, 'error');
+                    addLog(`❌ Error: ${error.message}`, 'error');
+                } finally {
+                    dom.setTargetBtn.disabled = false;
+                    dom.setTargetBtn.innerHTML = '🎯 Set Target';
+                }
+            }
+
+            function handleClearTarget() {
+                state.target = null;
+                state.targetType = 'individual';
+                dom.targetDisplay.style.display = 'none';
+                dom.targetBadge.textContent = 'Not Set';
+                dom.targetBadge.style.color = '#666';
+                dom.clearTargetBtn.style.display = 'none';
+                dom.targetInput.value = '';
+                addLog('✕ Target cleared', 'info');
+                showToast('✕ Target cleared', 'info');
+                dom.executeBtn.disabled = true;
+                dom.selectedVectorName.textContent = 'None selected';
+                document.querySelectorAll('.vector-card').forEach(c => c.classList.remove('selected'));
+                state.selectedVector = null;
+            }
+
+            // --- Execute Crash ---
+            async function handleExecuteCrash() {
+                if (!state.sessionId) { showToast('⚠️ Connect to WhatsApp first', 'warning'); return; }
+                if (!state.target) { showToast('⚠️ Set a target first', 'warning'); return; }
+                if (!state.selectedVector) { showToast('⚠️ Select a crash vector', 'warning'); return; }
+                if (state.isExecuting) return;
+                state.isExecuting = true;
+                dom.executeBtn.disabled = true;
+                dom.executeBtn.innerHTML = '<span class="spinner"></span> Executing...';
+                try {
+                    const result = await apiCall('/api/crash', 'POST', {
+                        sessionId: state.sessionId,
+                        vector: state.selectedVector
+                    });
+                    if (result.success) {
+                        const vectorName = result.vectorName || state.selectedVector;
+                        if (result.status === 'success') {
+                            state.crashCount++;
+                            addLog(`✅💀 ${vectorName} → CRASHED ${result.target}`, 'success');
+                            showToast(`✅💀 ${vectorName} CRASHED ${result.target}!`, 'success', 6000);
+                            document.body.style.transition = 'background 0.1s';
+                            document.body.style.background = 'rgba(37,211,102,0.02)';
+                            setTimeout(() => { document.body.style.background = ''; }, 300);
+                        } else {
+                            addLog(`❌ ${vectorName} → Failed on ${result.target}`, 'error');
+                            showToast(`❌ ${vectorName} failed. Retry!`, 'error');
+                        }
+                        await loadMetrics();
+                    } else {
+                        showToast(`❌ Execution failed: ${result.error || 'Unknown error'}`, 'error');
+                        addLog(`❌ Execution failed: ${result.error || 'Unknown error'}`, 'error');
+                    }
+                } catch (error) {
+                    showToast(`❌ Execution error: ${error.message}`, 'error');
+                    addLog(`❌ Execution error: ${error.message}`, 'error');
+                } finally {
+                    state.isExecuting = false;
+                    dom.executeBtn.disabled = false;
+                    dom.executeBtn.innerHTML = '💀 Execute Crash';
+                }
+            }
+
+            // --- Load Metrics ---
+            async function loadMetrics() {
+                try {
+                    const result = await apiCall('/api/metrics');
+                    if (result.success && result.metrics) {
+                        updateMetrics(result.metrics);
+                    }
+                } catch (error) {
+                    console.error('Failed to load metrics:', error);
+                }
+            }
+
+            // --- Clear Logs ---
+            function clearLogs() {
+                state.logs = [];
+                renderLogs();
+                showToast('🧹 Logs cleared', 'info');
+            }
+
+            // --- Refresh ---
+            async function refreshAll() {
+                await loadVectors();
+                await loadMetrics();
+                if (state.isConnected) {
+                    showToast('🔄 Refreshed', 'info');
+                    addLog('🔄 Data refreshed', 'info');
+                }
+            }
+
+            // --- Keyboard Shortcuts ---
+            document.addEventListener('keydown', (e) => {
+                if (e.target === dom.phoneInput && e.key === 'Enter') handleConnect();
+                if (e.target === dom.targetInput && e.key === 'Enter') handleSetTarget();
+                if (e.ctrlKey && e.key === 'Enter') handleExecuteCrash();
+            });
+
+            // --- Init ---
+            function init() {
+                dom.connectBtn.addEventListener('click', handleConnect);
+                dom.disconnectBtn.addEventListener('click', handleDisconnect);
+                dom.setTargetBtn.addEventListener('click', handleSetTarget);
+                dom.clearTargetBtn.addEventListener('click', handleClearTarget);
+                dom.executeBtn.addEventListener('click', handleExecuteCrash);
+                dom.refreshVectorsBtn.addEventListener('click', refreshAll);
+                dom.clearLogsBtn.addEventListener('click', clearLogs);
+                loadVectors();
+                loadMetrics();
+                dom.statusDot.className = 'status-dot offline';
+                dom.statusText.textContent = 'Offline';
+                dom.connectionBadge.textContent = 'Disconnected';
+                dom.connectionBadge.style.color = '#666';
+                dom.setTargetBtn.disabled = true;
+                dom.targetInput.disabled = true;
+                dom.executeBtn.disabled = true;
+                addLog('🔥 WhatsApp Crash Suite v4.0 loaded', 'info');
+                showToast('🔥 Ready! Connect your WhatsApp to start.', 'info', 4000);
+            }
+
+            document.addEventListener('DOMContentLoaded', init);
+        })();
+    </script>
+</body>
+</html>
