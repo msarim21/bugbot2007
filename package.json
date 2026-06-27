@@ -1,6 +1,8 @@
+
 {
   "name": "whatsapp-crash-suite",
   "version": "4.0.0",
+  "description": "🔥 Ultimate WhatsApp Crash Suite",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
