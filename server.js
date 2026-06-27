@@ -218,6 +218,13 @@ async function connectToWhatsApp(phoneNumber, socketId) {
                         { upsert: true }
                     ).catch(() => {});
                     console.log(`💾 Number ${phoneNumber} saved to MongoDB`);
+                } else {
+                    // File-based: persist phone number for auto-reconnect on restart
+                    const fs = require('fs');
+                    const authDir = 'auth_info_baileys';
+                    if (fs.existsSync(authDir)) {
+                        fs.writeFileSync(require('path').join(authDir, '.phone'), phoneNumber);
+                    }
                 }
             }
         });
@@ -574,10 +581,60 @@ async function restoreSessionFromEnv() {
     }
 }
 
+// ── Auto-reconnect on startup (if session already exists) ─────────────────────
+async function autoReconnect() {
+    let phoneNumber = null;
+
+    try {
+        if (mongoReady) {
+            // Get most recently active number from MongoDB
+            const record = await PairedNumber.findOne(
+                { status: { $in: ['active', 'offline'] } },
+                {},
+                { sort: { lastSeen: -1 } }
+            ).lean();
+            if (record) phoneNumber = record.number;
+
+            // Also check if auth keys exist
+            const keyCount = await AuthKey.countDocuments();
+            if (!phoneNumber || keyCount === 0) {
+                console.log('ℹ️  No prior session found — skipping auto-reconnect');
+                return;
+            }
+        } else {
+            const fs = require('fs');
+            const phonePath = require('path').join('auth_info_baileys', '.phone');
+            if (!fs.existsSync(phonePath)) {
+                console.log('ℹ️  No .phone file found — skipping auto-reconnect');
+                return;
+            }
+            phoneNumber = fs.readFileSync(phonePath, 'utf8').trim();
+            if (!fs.existsSync('auth_info_baileys')) {
+                console.log('ℹ️  No auth files found — skipping auto-reconnect');
+                return;
+            }
+        }
+
+        if (!phoneNumber) return;
+
+        console.log(`🔄 Auto-reconnecting WhatsApp for ${phoneNumber}...`);
+        connectionStatus = 'reconnecting';
+        io.emit('status_update', { status: 'reconnecting', phone: phoneNumber });
+
+        await connectToWhatsApp(phoneNumber, 'auto-reconnect');
+    } catch (e) {
+        console.error('❌ Auto-reconnect failed:', e.message);
+        connectionStatus = 'offline';
+        io.emit('status_update', { status: 'offline' });
+    }
+}
+
 connectMongo().then(async () => {
     await restoreSessionFromEnv();
-    server.listen(PORT, () => {
+    server.listen(PORT, async () => {
         console.log(`🔥 WhatsApp Crash Suite v4.0 running on port ${PORT}`);
         console.log(`💀 ${VECTORS.length} crash vectors | MongoDB: ${mongoReady ? '✅' : '❌ (set MONGO_URL)'}`);
+        // Small delay so socket.io is ready before emitting events
+        setTimeout(autoReconnect, 2000);
     });
 });
