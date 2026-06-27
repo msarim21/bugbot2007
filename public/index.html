@@ -482,6 +482,14 @@
                 dom.connectionStatus.style.color = '#f5a623';
                 addLog(`📱 Pairing code: ${data.pairingCode}`, 'info');
             }
+        } else if (data.status === 'reconnecting') {
+            state.connected = false;
+            dom.connectionStatus.textContent = `🔄 Auto-connecting${data.phone ? ' (' + data.phone + ')' : ''}...`;
+            dom.connectionStatus.style.color = '#f5a623';
+            dom.pairingDisplay.style.display = 'none';
+            dom.pairBtn.innerHTML = '🔄 Auto-connecting...';
+            dom.pairBtn.disabled = true;
+            addLog(`🔄 Auto-reconnecting${data.phone ? ' for ' + data.phone : ''}...`, 'info');
         } else if (data.status === 'offline' || data.status === 'disconnected') {
             state.connected = false;
             dom.connectionStatus.textContent = '⏳ Disconnected';
