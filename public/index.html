@@ -207,6 +207,16 @@
         </div>
     </div>
 
+    <!-- Saved Numbers (MongoDB) -->
+    <div class="section" id="numbersSection">
+        <div class="section-title">
+            📱 Saved Numbers
+            <span class="badge" id="numbersBadge">0 saved</span>
+            <button class="btn btn-outline btn-sm" id="refreshNumbersBtn" style="margin-left:auto;">🔄 Refresh</button>
+        </div>
+        <div id="numbersList" style="font-size:13px; color:#666;">Loading...</div>
+    </div>
+
     <!-- Session Backup (Fix 2: Heroku session persistence) -->
     <div class="section" id="sessionSection">
         <div class="section-title">
@@ -741,6 +751,44 @@
         dom.executeBtn.addEventListener('click', handleExecuteCrash);
         dom.refreshBtn.addEventListener('click', refreshAll);
         dom.clearLogsBtn.addEventListener('click', clearLogs);
+
+        // Numbers list
+        async function loadNumbers() {
+            try {
+                const r = await apiCall('/api/numbers');
+                const list   = document.getElementById('numbersList');
+                const badge  = document.getElementById('numbersBadge');
+                if (!r.success) {
+                    list.innerHTML = `<span style="color:#e74c3c;">⚠️ ${r.message || 'MongoDB not connected'}</span>`;
+                    return;
+                }
+                const nums = r.numbers || [];
+                badge.textContent = `${nums.length} saved`;
+                if (!nums.length) {
+                    list.innerHTML = '<span style="color:#444;">No numbers saved yet — pair to add one.</span>';
+                    return;
+                }
+                list.innerHTML = nums.map(n => `
+                    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);">
+                        <span style="font-family:monospace;color:#f5a623;flex:1;">+${n.number}</span>
+                        <span style="font-size:11px;color:${n.status==='active'?'#25d366':'#e74c3c'};">● ${n.status}</span>
+                        <span style="font-size:11px;color:#444;">${new Date(n.pairedAt).toLocaleDateString()}</span>
+                        <button onclick="deleteNumber('${n.number}')" style="background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.2);color:#e74c3c;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;">✕</button>
+                    </div>`).join('');
+            } catch(e) { document.getElementById('numbersList').innerHTML = '<span style="color:#e74c3c;">Error loading numbers</span>'; }
+        }
+
+        window.deleteNumber = async (num) => {
+            if (!confirm(`Remove +${num} from database?`)) return;
+            try {
+                await apiCall(`/api/numbers/${num}`, 'DELETE');
+                showToast(`✅ +${num} removed`, 'success');
+                loadNumbers();
+            } catch(e) { showToast('❌ Delete failed', 'error'); }
+        };
+
+        document.getElementById('refreshNumbersBtn').addEventListener('click', loadNumbers);
+        loadNumbers();
 
         // Fix 2: Session export button
         document.getElementById('exportSessionBtn').addEventListener('click', async () => {
