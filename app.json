@@ -1,8 +1,8 @@
 {
   "name": "WhatsApp Crash Suite",
-  "description": "🔥 Real WhatsApp Crash Suite with Baileys",
+  "description": "🔥 Real WhatsApp Crash Suite with Pairing Code",
   "repository": "https://github.com/yourusername/whatsapp-crash-suite",
-  "keywords": ["whatsapp", "crash", "baileys", "security"],
+  "keywords": ["whatsapp", "crash", "baileys", "pairing"],
   "env": {
     "NODE_ENV": {
       "value": "production"
