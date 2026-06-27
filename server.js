@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
-const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 
 const app = express();
@@ -52,35 +52,27 @@ async function connectToWhatsApp(phoneNumber, socketId) {
 
         const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
+        // ✅ FIX: Always fetch the latest WA version — hardcoded versions get rejected
+        const { version } = await fetchLatestBaileysVersion();
+
         sock = makeWASocket({
+            version,
             auth: state,
             logger: pino({ level: 'silent' }),
             browser: ['WhatsApp Crash Suite', 'Chrome', '120.0.0.0'],
-            version: [2, 2410, 1],
             connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 30000,
             keepAliveIntervalMs: 10000,
             markOnlineOnConnect: true,
-            // 🔥 Enable pairing code
-            usePairingCode: true,
-            phoneNumber: cleanNumber
+            printQRInTerminal: false,
         });
 
         sock.ev.on('creds.update', saveCreds);
 
         sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, pairingCode } = update;
+            const { connection, lastDisconnect } = update;
 
-            console.log('🔔 Connection update:', { connection, pairingCode });
-
-            if (pairingCode) {
-                currentPairingCode = pairingCode;
-                connectionStatus = 'pairing';
-                console.log(`📱 Pairing Code: ${pairingCode}`);
-                // Send to all connected clients
-                io.emit('pairing_code', { code: pairingCode });
-                // Also store for HTTP fallback
-            }
+            console.log('🔔 Connection update:', { connection });
 
             if (connection === 'close') {
                 const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
@@ -90,7 +82,6 @@ async function connectToWhatsApp(phoneNumber, socketId) {
                 currentPairingCode = null;
                 io.emit('status_update', { status: 'disconnected' });
                 if (shouldReconnect) {
-                    // Retry after 5 seconds
                     setTimeout(() => connectToWhatsApp(phoneNumber, socketId), 5000);
                 }
             } else if (connection === 'open') {
@@ -101,7 +92,6 @@ async function connectToWhatsApp(phoneNumber, socketId) {
                 currentPhoneNumber = phoneNumber;
                 io.emit('status_update', { status: 'connected', phone: phoneNumber });
                 io.emit('connected', { message: '✅ Connected!' });
-                // Clear pairing code after connect
             }
         });
 
@@ -117,17 +107,18 @@ async function connectToWhatsApp(phoneNumber, socketId) {
             }
         });
 
-        // Wait for first connection update to get pairing code
-        await new Promise((resolve) => {
-            const check = () => {
-                if (currentPairingCode || isConnected) {
-                    resolve();
-                } else {
-                    setTimeout(check, 500);
-                }
-            };
-            check();
-        });
+        // ✅ FIX: requestPairingCode() returns the code directly — it does NOT
+        // come via connection.update in Baileys 6.x. Only request if not yet registered.
+        if (!state.creds.registered) {
+            connectionStatus = 'pairing';
+            // Give socket ~3s to establish WS connection before requesting
+            await new Promise(r => setTimeout(r, 3000));
+            const code = await sock.requestPairingCode(cleanNumber);
+            currentPairingCode = code;
+            console.log(`📱 Pairing Code: ${code}`);
+            io.emit('pairing_code', { code });
+            io.emit('status_update', { status: 'pairing', pairingCode: code });
+        }
 
         return { success: true, pairingCode: currentPairingCode };
     } catch (error) {
