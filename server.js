@@ -236,8 +236,20 @@ async function connectToWhatsApp(phoneNumber, socketId) {
         // Request pairing code if not yet registered
         if (!state.creds.registered) {
             connectionStatus = 'pairing';
-            await new Promise(r => setTimeout(r, 3000));
+            // Wait for WebSocket to be fully open before requesting pairing code
+            await new Promise((resolve) => {
+                if (sock.ws && sock.ws.readyState === 1) {
+                    resolve();
+                } else if (sock.ws) {
+                    sock.ws.once('open', resolve);
+                    setTimeout(resolve, 5000); // fallback timeout
+                } else {
+                    setTimeout(resolve, 5000);
+                }
+            });
+            await new Promise(r => setTimeout(r, 1500)); // small buffer after open
             const code = await sock.requestPairingCode(cleanNumber);
+            if (!code) throw new Error('Pairing code not received from WhatsApp — try again');
             currentPairingCode = code;
             console.log(`📱 Pairing Code: ${code}`);
             io.emit('pairing_code', { code });
@@ -342,9 +354,19 @@ io.on('connection', (socket) => {
         const { phoneNumber } = data;
         if (!phoneNumber) { socket.emit('error', { message: 'Phone number required' }); return; }
         try {
-            if (sock && isConnected) {
+            if (sock) {
                 try { sock.end(); } catch (_) {}
                 sock = null; isConnected = false; currentPairingCode = null; connectionStatus = 'offline';
+            }
+            // Clear stale auth state so fresh pairing always works
+            if (mongoReady) {
+                await AuthKey.deleteMany({}).catch(() => {});
+            } else {
+                const fs = require('fs');
+                const authDir = 'auth_info_baileys';
+                if (fs.existsSync(authDir)) {
+                    fs.rmSync(authDir, { recursive: true, force: true });
+                }
             }
             await connectToWhatsApp(phoneNumber, socket.id);
             socket.emit('status_update', { status: 'pairing', pairingCode: currentPairingCode });
