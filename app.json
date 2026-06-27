@@ -1,0 +1,16 @@
+{
+  "name": "WhatsApp Crash Suite",
+  "description": "🔥 Ultimate WhatsApp Crash Testing Platform v4.0",
+  "repository": "https://github.com/msarim21/bugbot007",
+  "keywords": ["whatsapp", "crash", "security", "testing", "nodejs"],
+  "env": {
+    "NODE_ENV": {
+      "value": "production"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "https://github.com/heroku/heroku-buildpack-nodejs"
+    }
+  ]
+}
