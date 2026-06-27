@@ -472,6 +472,31 @@ app.post('/api/crash', async (req, res) => {
     }
 });
 
+// ── Session export (for Heroku SESSION_DATA backup) ──────────────────────────
+app.get('/api/session', async (req, res) => {
+    try {
+        if (mongoReady) {
+            const keys = await AuthKey.find().lean();
+            if (!keys.length) return res.json({ success: false, message: 'No session yet — pair first' });
+            const sessionData = Buffer.from(JSON.stringify(keys)).toString('base64');
+            res.json({ success: true, session: sessionData });
+        } else {
+            const fs = require('fs');
+            const authDir = 'auth_info_baileys';
+            if (!fs.existsSync(authDir)) return res.json({ success: false, message: 'No session yet — pair first' });
+            const files = fs.readdirSync(authDir);
+            const data = {};
+            for (const f of files) {
+                data[f] = fs.readFileSync(require('path').join(authDir, f), 'utf8');
+            }
+            const sessionData = Buffer.from(JSON.stringify(data)).toString('base64');
+            res.json({ success: true, session: sessionData });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // ── Logs & Metrics ────────────────────────────────────────────────────────────
 app.get('/api/logs', (req, res) => {
     res.json({ success: true, logs: crashLogs.slice(0, 100) });
@@ -493,7 +518,33 @@ app.get('*', (req, res) => {
 // 🚀 START
 // ============================================================
 
-connectMongo().then(() => {
+// ── SESSION_DATA restore (Heroku restart fix) ─────────────────────────────────
+async function restoreSessionFromEnv() {
+    const sessionData = process.env.SESSION_DATA;
+    if (!sessionData) return;
+    try {
+        const parsed = JSON.parse(Buffer.from(sessionData, 'base64').toString('utf8'));
+        if (mongoReady && Array.isArray(parsed)) {
+            for (const doc of parsed) {
+                await AuthKey.updateOne({ _id: doc._id }, { $set: { data: doc.data } }, { upsert: true });
+            }
+            console.log(`✅ Session restored from SESSION_DATA (${parsed.length} keys)`);
+        } else if (!mongoReady && typeof parsed === 'object') {
+            const fs = require('fs');
+            const authDir = 'auth_info_baileys';
+            if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+            for (const [filename, content] of Object.entries(parsed)) {
+                fs.writeFileSync(require('path').join(authDir, filename), content);
+            }
+            console.log(`✅ Session restored from SESSION_DATA (${Object.keys(parsed).length} files)`);
+        }
+    } catch (e) {
+        console.error('❌ Failed to restore SESSION_DATA:', e.message);
+    }
+}
+
+connectMongo().then(async () => {
+    await restoreSessionFromEnv();
     server.listen(PORT, () => {
         console.log(`🔥 WhatsApp Crash Suite v4.0 running on port ${PORT}`);
         console.log(`💀 ${VECTORS.length} crash vectors | MongoDB: ${mongoReady ? '✅' : '❌ (set MONGO_URL)'}`);
