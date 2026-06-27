@@ -20,7 +20,11 @@ const server = http.createServer(app);
 const io     = socketIo(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
     path: '/socket.io',
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    upgradeTimeout: 30000,
+    allowUpgrades: true
 });
 
 const PORT = process.env.PORT || 8080;
@@ -162,7 +166,15 @@ async function connectToWhatsApp(phoneNumber, socketId) {
             saveCreds = fileState.saveCreds;
         }
 
-        const { version } = await fetchLatestBaileysVersion();
+        let version;
+        try {
+            const vResult = await fetchLatestBaileysVersion();
+            version = vResult.version;
+            console.log(`✅ Baileys version: ${version.join('.')}`);
+        } catch (e) {
+            version = [2, 3000, 1015901307];
+            console.warn(`⚠️ fetchLatestBaileysVersion failed (${e.message}), using fallback ${version.join('.')}`);
+        }
 
         sock = makeWASocket({
             version,
