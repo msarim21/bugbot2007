@@ -207,6 +207,24 @@
         </div>
     </div>
 
+    <!-- Session Backup (Fix 2: Heroku session persistence) -->
+    <div class="section" id="sessionSection">
+        <div class="section-title">
+            💾 Session Backup
+            <span class="badge">Heroku Restart Fix</span>
+        </div>
+        <div style="font-size:12px; color:#666; margin-bottom:12px;">
+            Heroku disk resets on restart — copy this session string, set it as <code style="color:#25d366;background:rgba(37,211,102,0.08);padding:2px 6px;border-radius:4px;">SESSION_DATA</code> config var on Heroku to avoid re-pairing.
+        </div>
+        <div class="row">
+            <button class="btn btn-outline btn-sm" id="exportSessionBtn">📋 Copy Session String</button>
+            <span id="sessionCopyStatus" style="font-size:12px;color:#666;"></span>
+        </div>
+        <div id="sessionStringWrap" style="display:none;margin-top:12px;">
+            <textarea id="sessionStringBox" readonly style="width:100%;height:80px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);border-radius:10px;color:#888;font-size:10px;padding:10px;font-family:monospace;resize:none;outline:none;"></textarea>
+        </div>
+    </div>
+
     <!-- Footer -->
     <div style="margin-top:20px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.03); display:flex; justify-content:space-between; flex-wrap:wrap; font-size:11px; color:#333;">
         <span>🔥 WhatsApp Crash Suite v4.0 — Pairing Code</span>
@@ -220,7 +238,14 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (function() {
-    const socket = io();
+    // Fix 3: Auto-reconnect — socket reconnects if server restarts, no page refresh needed
+    const socket = io({
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
+    });
 
     // ============================================================
     // STATE
@@ -459,6 +484,21 @@
         addLog('❌ ' + data.message, 'error');
     });
 
+    // Fix 3: Auto-reconnect events
+    socket.on('reconnect', () => {
+        addLog('🔄 Reconnected to server', 'success');
+        showToast('🔄 Server se reconnect ho gaya', 'success');
+        checkStatus();
+    });
+    socket.on('reconnect_attempt', () => {
+        dom.connectionStatus.textContent = '🔄 Reconnecting...';
+        dom.connectionStatus.style.color = '#f5a623';
+    });
+    socket.on('connect_error', () => {
+        dom.connectionStatus.textContent = '❌ Server unreachable — retrying...';
+        dom.connectionStatus.style.color = '#e74c3c';
+    });
+
     // ============================================================
     // POLLING FALLBACK for pairing code
     // ============================================================
@@ -551,12 +591,13 @@
         // Also start polling for code (fallback)
         setTimeout(pollPairingCode, 3000);
         setTimeout(pollPairingCode, 6000);
-        // Reset button after 10 seconds if no response
+        // Fix 4: Timeout cancels zombie backend connection too
         setTimeout(() => {
             if (dom.pairBtn.innerHTML.includes('Generating')) {
+                socket.emit('cancel_pair');
                 dom.pairBtn.innerHTML = '🔑 Get Pairing Code';
                 dom.pairBtn.disabled = false;
-                dom.connectionStatus.textContent = '⏳ Timeout. Try again.';
+                dom.connectionStatus.textContent = '⏳ Timeout — try again.';
                 dom.connectionStatus.style.color = '#e74c3c';
             }
         }, 15000);
@@ -700,6 +741,30 @@
         dom.executeBtn.addEventListener('click', handleExecuteCrash);
         dom.refreshBtn.addEventListener('click', refreshAll);
         dom.clearLogsBtn.addEventListener('click', clearLogs);
+
+        // Fix 2: Session export button
+        document.getElementById('exportSessionBtn').addEventListener('click', async () => {
+            try {
+                const r = await apiCall('/api/session');
+                const wrap = document.getElementById('sessionStringWrap');
+                const box  = document.getElementById('sessionStringBox');
+                const status = document.getElementById('sessionCopyStatus');
+                if (r.success && r.session) {
+                    box.value = r.session;
+                    wrap.style.display = 'block';
+                    await navigator.clipboard.writeText(r.session).catch(() => {});
+                    status.textContent = '✅ Copied! Set as SESSION_DATA on Heroku.';
+                    status.style.color = '#25d366';
+                    showToast('✅ Session copied — set SESSION_DATA on Heroku', 'success', 6000);
+                } else {
+                    status.textContent = '⚠️ No session yet — pair first.';
+                    status.style.color = '#f5a623';
+                    showToast('⚠️ Pair first, then export session', 'warning');
+                }
+            } catch(e) {
+                showToast('❌ Export failed: ' + e.message, 'error');
+            }
+        });
 
         loadVectors();
         loadMetrics();
