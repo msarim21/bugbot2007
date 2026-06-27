@@ -1,5 +1,11 @@
 'use strict';
 
+// ── MUST BE FIRST: crypto polyfill for Node.js 18 (Baileys signal protocol needs it) ──
+if (!globalThis.crypto) {
+    const { webcrypto } = require('crypto');
+    globalThis.crypto = webcrypto;
+}
+
 const express  = require('express');
 const path     = require('path');
 const http     = require('http');
