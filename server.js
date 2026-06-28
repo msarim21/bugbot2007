@@ -9,17 +9,15 @@ if (!globalThis.crypto) {
 const express  = require('express');
 const path     = require('path');
 const http     = require('http');
+const fs       = require('fs');
 const socketIo = require('socket.io');
-const mongoose = require('mongoose');
 const pino     = require('pino');
 const {
     makeWASocket,
     DisconnectReason,
     fetchLatestBaileysVersion,
     Browsers,
-    BufferJSON,
-    initAuthCreds,
-    proto
+    useMultiFileAuthState
 } = require('@whiskeysockets/baileys');
 
 const app    = express();
@@ -35,118 +33,72 @@ const io     = socketIo(server, {
     allowUpgrades: true
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT     = process.env.PORT || 8080;
+const AUTH_DIR = 'auth_info_baileys';
+const NUMBERS_FILE = 'paired_numbers.json';
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================================
-// 🍃 MONGODB SCHEMAS
+// 📂 JSON FILE HELPERS (replaces MongoDB)
 // ============================================================
 
-const authKeySchema = new mongoose.Schema({
-    _id:  { type: String },
-    data: { type: String }
-}, { collection: 'auth_keys' });
+function readNumbers() {
+    try {
+        if (fs.existsSync(NUMBERS_FILE)) {
+            return JSON.parse(fs.readFileSync(NUMBERS_FILE, 'utf8'));
+        }
+    } catch (_) {}
+    return [];
+}
 
-const numberSchema = new mongoose.Schema({
-    number:    { type: String, unique: true },
-    pairedAt:  { type: Date, default: Date.now },
-    lastSeen:  { type: Date, default: Date.now },
-    status:    { type: String, default: 'active' }
-}, { collection: 'paired_numbers' });
+function writeNumbers(numbers) {
+    try { fs.writeFileSync(NUMBERS_FILE, JSON.stringify(numbers, null, 2)); } catch (_) {}
+}
 
-const AuthKey      = mongoose.model('AuthKey', authKeySchema);
-const PairedNumber = mongoose.model('PairedNumber', numberSchema);
+function upsertNumber(number) {
+    const numbers = readNumbers();
+    const idx = numbers.findIndex(n => n.number === number);
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+        numbers[idx].status   = 'active';
+        numbers[idx].lastSeen = now;
+    } else {
+        numbers.unshift({ number, status: 'active', pairedAt: now, lastSeen: now });
+    }
+    writeNumbers(numbers);
+}
 
-// ============================================================
-// 🔐 MONGODB AUTH STATE (replaces useMultiFileAuthState)
-// ============================================================
+function setNumberOffline(number) {
+    if (!number) return;
+    const numbers = readNumbers();
+    const idx = numbers.findIndex(n => n.number === number);
+    if (idx >= 0) {
+        numbers[idx].status   = 'offline';
+        numbers[idx].lastSeen = new Date().toISOString();
+        writeNumbers(numbers);
+    }
+}
 
-async function useMongoAuthState() {
-    const writeData = async (data, key) => {
-        const encoded = JSON.stringify(data, BufferJSON.replacer);
-        await AuthKey.updateOne({ _id: key }, { $set: { data: encoded } }, { upsert: true });
-    };
-
-    const readData = async (key) => {
-        const doc = await AuthKey.findOne({ _id: key });
-        return doc ? JSON.parse(doc.data, BufferJSON.reviver) : null;
-    };
-
-    const removeData = async (key) => {
-        await AuthKey.deleteOne({ _id: key });
-    };
-
-    const creds = (await readData('creds')) || initAuthCreds();
-
-    return {
-        state: {
-            creds,
-            keys: {
-                get: async (type, ids) => {
-                    const data = {};
-                    await Promise.all(ids.map(async (id) => {
-                        let value = await readData(`${type}-${id}`);
-                        if (type === 'app-state-sync-key' && value) {
-                            value = proto.Message.AppStateSyncKeyData.fromObject(value);
-                        }
-                        data[id] = value;
-                    }));
-                    return data;
-                },
-                set: async (data) => {
-                    const tasks = [];
-                    for (const category of Object.keys(data)) {
-                        for (const id of Object.keys(data[category])) {
-                            const value = data[category][id];
-                            const key   = `${category}-${id}`;
-                            tasks.push(value ? writeData(value, key) : removeData(key));
-                        }
-                    }
-                    await Promise.all(tasks);
-                }
-            }
-        },
-        saveCreds: () => writeData(creds, 'creds')
-    };
+function removeNumber(number) {
+    writeNumbers(readNumbers().filter(n => n.number !== number));
 }
 
 // ============================================================
 // STATE
 // ============================================================
 
-let sock              = null;
-let isConnected       = false;
-let isPairing         = false;
-let wasConnected      = false;
+let sock               = null;
+let isConnected        = false;
+let isPairing          = false;
+let wasConnected       = false;
 let currentPairingCode = null;
-let currentQR         = null;     // latest QR string for QR-code mode
+let currentQR          = null;
 let currentPhoneNumber = null;
-let connectionStatus  = 'offline';
-let pairMode          = 'qr';    // 'qr' | 'code'  — QR is default (works on ALL WhatsApp versions)
-const crashLogs       = [];
-let mongoReady        = false;
-
-// ============================================================
-// 🔌 MONGODB CONNECTION
-// ============================================================
-
-async function connectMongo() {
-    const uri = process.env.MONGO_URL || process.env.MONGODB_URI;
-    if (!uri) {
-        console.warn('⚠️  MONGO_URL not set — session will NOT persist across restarts!');
-        return false;
-    }
-    try {
-        await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
-        console.log('✅ MongoDB connected');
-        mongoReady = true;
-        return true;
-    } catch (e) {
-        console.error('❌ MongoDB connection failed:', e.message);
-        return false;
-    }
-}
+let connectionStatus   = 'offline';
+let pairMode           = 'qr';
+const crashLogs        = [];
 
 // ============================================================
 // 🔥 WHATSAPP CONNECTION  (QR Code OR Pairing Code)
@@ -158,25 +110,16 @@ async function connectToWhatsApp(phoneNumber, socketId, mode = 'qr') {
         if (cleanNumber.length < 10) throw new Error('Invalid phone number (min 10 digits)');
 
         if (sock) {
-            try { sock.end(); } catch (_) {}
+            try { sock.end(undefined); } catch (_) {}
             sock = null;
             isConnected = false;
             currentPairingCode = null;
             connectionStatus = 'offline';
         }
 
-        // ── Auth state: MongoDB if available, else in-memory fallback ──────
-        let state, saveCreds;
-        if (mongoReady) {
-            const mongoState = await useMongoAuthState();
-            state     = mongoState.state;
-            saveCreds = mongoState.saveCreds;
-        } else {
-            const { useMultiFileAuthState } = require('@whiskeysockets/baileys');
-            const fileState = await useMultiFileAuthState('auth_info_baileys');
-            state     = fileState.state;
-            saveCreds = fileState.saveCreds;
-        }
+        // ── Auth state: JSON files via useMultiFileAuthState ──────────────────
+        fs.mkdirSync(AUTH_DIR, { recursive: true });
+        const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
         let version;
         try {
@@ -192,8 +135,6 @@ async function connectToWhatsApp(phoneNumber, socketId, mode = 'qr') {
             version,
             auth: state,
             logger: pino({ level: 'silent' }),
-            // ── CRITICAL: use a standard browser tuple — WhatsApp rejects unknown strings ──
-            // Baileys.Browsers.ubuntu('Chrome') = ['Ubuntu', 'Chrome', '120.0.0.1']
             browser: Browsers.ubuntu('Chrome'),
             mobile: false,
             connectTimeoutMs: 60000,
@@ -224,7 +165,7 @@ async function connectToWhatsApp(phoneNumber, socketId, mode = 'qr') {
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 const loggedOut  = statusCode === DisconnectReason.loggedOut;
-                const hadSession = wasConnected; // snapshot before clearing
+                const hadSession = wasConnected;
                 console.log(`⚠️  Connection closed | wasConnected:${hadSession} | isPairing:${isPairing} | loggedOut:${loggedOut}`);
 
                 isConnected        = false;
@@ -234,18 +175,9 @@ async function connectToWhatsApp(phoneNumber, socketId, mode = 'qr') {
                 connectionStatus   = 'offline';
                 io.emit('status_update', { status: 'disconnected' });
 
-                // Update number status in DB
-                if (currentPhoneNumber && mongoReady) {
-                    await PairedNumber.updateOne(
-                        { number: currentPhoneNumber },
-                        { $set: { status: 'offline', lastSeen: new Date() } }
-                    ).catch(() => {});
-                }
+                setNumberOffline(currentPhoneNumber);
 
-                // ── KEY FIX: only reconnect if session was fully established before drop ──
-                // During pairing (isPairing was true / hadSession false) — NEVER reconnect.
-                // A new reconnect generates a new pairing code, invalidating the current one
-                // and causing "Couldn't link device" on WhatsApp.
+                // ── Only reconnect if session was fully established before drop ──
                 if (!loggedOut && hadSession) {
                     console.log('🔄 Re-connecting established session in 5s...');
                     setTimeout(() => connectToWhatsApp(phoneNumber, socketId), 5000);
@@ -263,22 +195,10 @@ async function connectToWhatsApp(phoneNumber, socketId, mode = 'qr') {
                 io.emit('status_update', { status: 'connected', phone: phoneNumber });
                 io.emit('connected', { message: '✅ Connected!' });
 
-                // Save/update number in MongoDB
-                if (mongoReady) {
-                    await PairedNumber.updateOne(
-                        { number: phoneNumber },
-                        { $set: { status: 'active', lastSeen: new Date() }, $setOnInsert: { pairedAt: new Date() } },
-                        { upsert: true }
-                    ).catch(() => {});
-                    console.log(`💾 Number ${phoneNumber} saved to MongoDB`);
-                } else {
-                    // File-based: persist phone number for auto-reconnect on restart
-                    const fs = require('fs');
-                    const authDir = 'auth_info_baileys';
-                    if (fs.existsSync(authDir)) {
-                        fs.writeFileSync(require('path').join(authDir, '.phone'), phoneNumber);
-                    }
-                }
+                // Save number + phone file for auto-reconnect
+                upsertNumber(phoneNumber);
+                fs.writeFileSync(path.join(AUTH_DIR, '.phone'), phoneNumber);
+                console.log(`💾 Number ${phoneNumber} saved to paired_numbers.json`);
             }
         });
 
@@ -298,7 +218,6 @@ async function connectToWhatsApp(phoneNumber, socketId, mode = 'qr') {
             isPairing        = true;
             connectionStatus = 'pairing';
             console.log(`🔑 Requesting pairing code for: ${cleanNumber}`);
-            // Wait for WebSocket to open fully
             await new Promise((resolve) => {
                 if (sock.ws && sock.ws.readyState === 1) { resolve(); }
                 else if (sock.ws) { sock.ws.once('open', resolve); setTimeout(resolve, 8000); }
@@ -314,7 +233,7 @@ async function connectToWhatsApp(phoneNumber, socketId, mode = 'qr') {
             io.emit('status_update', { status: 'pairing', pairingCode: code });
         }
 
-        // QR mode: Baileys will auto-emit QR via connection.update — nothing to do here
+        // QR mode: Baileys will auto-emit QR via connection.update
         if (!state.creds.registered && mode === 'qr') {
             isPairing        = true;
             connectionStatus = 'qr';
@@ -425,18 +344,13 @@ io.on('connection', (socket) => {
         }
         pairMode = mode;
         try {
-            if (sock) { try { sock.end(); } catch (_) {} sock = null; }
+            if (sock) { try { sock.end(undefined); } catch (_) {} sock = null; }
             isConnected = false; wasConnected = false; isPairing = false;
             currentPairingCode = null; currentQR = null; connectionStatus = 'offline';
 
             // Clear stale auth so fresh pairing works
-            if (mongoReady) {
-                await AuthKey.deleteMany({}).catch(() => {});
-            } else {
-                const fs = require('fs');
-                const authDir = 'auth_info_baileys';
-                if (fs.existsSync(authDir)) fs.rmSync(authDir, { recursive: true, force: true });
-            }
+            if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+
             await connectToWhatsApp(phoneNumber, socket.id, mode);
             socket.emit('status_update', {
                 status: mode === 'qr' ? 'qr' : 'pairing',
@@ -450,7 +364,7 @@ io.on('connection', (socket) => {
 
     socket.on('cancel_pair', () => {
         if (sock && !isConnected) {
-            try { sock.end(); } catch (_) {}
+            try { sock.end(undefined); } catch (_) {}
             sock = null; currentPairingCode = null; connectionStatus = 'offline';
             console.log('🚫 Pairing cancelled by client');
         }
@@ -471,8 +385,7 @@ app.get('/api/status', (req, res) => {
         connected: isConnected,
         phoneNumber: currentPhoneNumber || null,
         pairingCode: currentPairingCode || null,
-        status: connectionStatus,
-        mongoReady
+        status: connectionStatus
     });
 });
 
@@ -484,7 +397,7 @@ app.get('/api/pairing-code', (req, res) => {
 
 app.post('/api/disconnect', (req, res) => {
     try {
-        if (sock) { try { sock.end(); } catch (_) {} sock = null; }
+        if (sock) { try { sock.end(undefined); } catch (_) {} sock = null; }
         isConnected = false; currentPairingCode = null; currentPhoneNumber = null; connectionStatus = 'offline';
         io.emit('status_update', { status: 'offline' });
         res.json({ success: true });
@@ -493,21 +406,14 @@ app.post('/api/disconnect', (req, res) => {
     }
 });
 
-// ── Numbers saved in MongoDB ──────────────────────────────────────────────────
-app.get('/api/numbers', async (req, res) => {
-    try {
-        if (!mongoReady) return res.json({ success: false, message: 'MongoDB not connected' });
-        const numbers = await PairedNumber.find().sort({ pairedAt: -1 }).lean();
-        res.json({ success: true, numbers });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
+// ── Numbers saved in JSON file ────────────────────────────────────────────────
+app.get('/api/numbers', (req, res) => {
+    res.json({ success: true, numbers: readNumbers() });
 });
 
-app.delete('/api/numbers/:number', async (req, res) => {
+app.delete('/api/numbers/:number', (req, res) => {
     try {
-        if (!mongoReady) return res.json({ success: false, message: 'MongoDB not connected' });
-        await PairedNumber.deleteOne({ number: req.params.number });
+        removeNumber(req.params.number);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
@@ -545,57 +451,39 @@ app.post('/api/crash', async (req, res) => {
     }
 });
 
-// ── Session export (for Heroku SESSION_DATA backup) ──────────────────────────
-app.get('/api/session', async (req, res) => {
+// ── Session export ────────────────────────────────────────────────────────────
+app.get('/api/session', (req, res) => {
     try {
-        if (mongoReady) {
-            const keys = await AuthKey.find().lean();
-            if (!keys.length) return res.json({ success: false, message: 'No session yet — pair first' });
-            const sessionData = Buffer.from(JSON.stringify(keys)).toString('base64');
-            res.json({ success: true, session: sessionData });
-        } else {
-            const fs = require('fs');
-            const authDir = 'auth_info_baileys';
-            if (!fs.existsSync(authDir)) return res.json({ success: false, message: 'No session yet — pair first' });
-            const files = fs.readdirSync(authDir);
-            const data = {};
-            for (const f of files) {
-                data[f] = fs.readFileSync(require('path').join(authDir, f), 'utf8');
-            }
-            const sessionData = Buffer.from(JSON.stringify(data)).toString('base64');
-            res.json({ success: true, session: sessionData });
+        if (!fs.existsSync(AUTH_DIR)) return res.json({ success: false, message: 'No session yet — pair first' });
+        const files = fs.readdirSync(AUTH_DIR);
+        if (!files.length) return res.json({ success: false, message: 'No session yet — pair first' });
+        const data = {};
+        for (const f of files) {
+            data[f] = fs.readFileSync(path.join(AUTH_DIR, f), 'utf8');
         }
+        const sessionData = Buffer.from(JSON.stringify(data)).toString('base64');
+        res.json({ success: true, session: sessionData });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
 });
 
-// ── Session restore from UI (paste SESSION_DATA string directly) ──────────────
-app.post('/api/session/restore', async (req, res) => {
+// ── Session restore ───────────────────────────────────────────────────────────
+app.post('/api/session/restore', (req, res) => {
     const { session } = req.body;
     if (!session) return res.status(400).json({ success: false, error: 'session string required' });
     try {
         const parsed = JSON.parse(Buffer.from(session, 'base64').toString('utf8'));
-        if (mongoReady && Array.isArray(parsed)) {
-            await AuthKey.deleteMany({});
-            for (const doc of parsed) {
-                await AuthKey.updateOne({ _id: doc._id }, { $set: { data: doc.data } }, { upsert: true });
-            }
-            console.log(`✅ Session restored via UI (${parsed.length} keys)`);
-            res.json({ success: true, message: `Session restored (${parsed.length} keys) — click Get Pairing Code to reconnect` });
-        } else if (!mongoReady && typeof parsed === 'object') {
-            const fs = require('fs');
-            const authDir = 'auth_info_baileys';
-            if (fs.existsSync(authDir)) fs.rmSync(authDir, { recursive: true, force: true });
-            fs.mkdirSync(authDir, { recursive: true });
-            for (const [filename, content] of Object.entries(parsed)) {
-                fs.writeFileSync(require('path').join(authDir, filename), content);
-            }
-            console.log(`✅ Session restored via UI (${Object.keys(parsed).length} files)`);
-            res.json({ success: true, message: `Session restored (${Object.keys(parsed).length} files) — click Get Pairing Code to reconnect` });
-        } else {
-            res.status(400).json({ success: false, error: 'Invalid session format' });
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return res.status(400).json({ success: false, error: 'Invalid session format' });
         }
+        if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        fs.mkdirSync(AUTH_DIR, { recursive: true });
+        for (const [filename, content] of Object.entries(parsed)) {
+            fs.writeFileSync(path.join(AUTH_DIR, filename), content);
+        }
+        console.log(`✅ Session restored via UI (${Object.keys(parsed).length} files)`);
+        res.json({ success: true, message: `Session restored (${Object.keys(parsed).length} files) — click Get Pairing Code to reconnect` });
     } catch (e) {
         res.status(400).json({ success: false, error: 'Invalid session string — ' + e.message });
     }
@@ -623,22 +511,15 @@ app.get('*', (req, res) => {
 // ============================================================
 
 // ── SESSION_DATA restore (Heroku restart fix) ─────────────────────────────────
-async function restoreSessionFromEnv() {
+function restoreSessionFromEnv() {
     const sessionData = process.env.SESSION_DATA;
     if (!sessionData) return;
     try {
         const parsed = JSON.parse(Buffer.from(sessionData, 'base64').toString('utf8'));
-        if (mongoReady && Array.isArray(parsed)) {
-            for (const doc of parsed) {
-                await AuthKey.updateOne({ _id: doc._id }, { $set: { data: doc.data } }, { upsert: true });
-            }
-            console.log(`✅ Session restored from SESSION_DATA (${parsed.length} keys)`);
-        } else if (!mongoReady && typeof parsed === 'object') {
-            const fs = require('fs');
-            const authDir = 'auth_info_baileys';
-            if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+            if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
             for (const [filename, content] of Object.entries(parsed)) {
-                fs.writeFileSync(require('path').join(authDir, filename), content);
+                fs.writeFileSync(path.join(AUTH_DIR, filename), content);
             }
             console.log(`✅ Session restored from SESSION_DATA (${Object.keys(parsed).length} files)`);
         }
@@ -649,70 +530,30 @@ async function restoreSessionFromEnv() {
 
 // ── Auto-reconnect on startup (if session already exists) ─────────────────────
 async function autoReconnect() {
-    let phoneNumber = null;
-
     try {
-        if (mongoReady) {
-            // Get most recently active number from MongoDB
-            const record = await PairedNumber.findOne(
-                { status: { $in: ['active', 'offline'] } },
-                {},
-                { sort: { lastSeen: -1 } }
-            ).lean();
-            if (record) phoneNumber = record.number;
-
-            // Also check if auth keys exist
-            const keyCount = await AuthKey.countDocuments();
-            if (!phoneNumber || keyCount === 0) {
-                console.log('ℹ️  No prior session found — skipping auto-reconnect');
-                return;
-            }
-        } else {
-            const fs = require('fs');
-            const phonePath = require('path').join('auth_info_baileys', '.phone');
-            if (!fs.existsSync(phonePath)) {
-                console.log('ℹ️  No .phone file found — skipping auto-reconnect');
-                return;
-            }
-            phoneNumber = fs.readFileSync(phonePath, 'utf8').trim();
-            if (!fs.existsSync('auth_info_baileys')) {
-                console.log('ℹ️  No auth files found — skipping auto-reconnect');
-                return;
-            }
+        const phonePath = path.join(AUTH_DIR, '.phone');
+        if (!fs.existsSync(phonePath)) {
+            console.log('ℹ️  No .phone file found — skipping auto-reconnect');
+            return;
         }
-
+        const phoneNumber = fs.readFileSync(phonePath, 'utf8').trim();
         if (!phoneNumber) return;
 
-        // ── CRITICAL: verify session is actually registered before auto-connecting ──
-        // If creds are not registered, auto-connect will request a pairing code
-        // silently in the background — conflicting with any user-initiated pairing.
-        let credsRegistered = false;
-        try {
-            if (mongoReady) {
-                const credsDoc = await AuthKey.findOne({ _id: 'creds' }).lean();
-                if (credsDoc) {
-                    const parsed = JSON.parse(credsDoc.data);
-                    credsRegistered = !!parsed?.registered;
-                }
-            } else {
-                const fs = require('fs');
-                const credsPath = require('path').join('auth_info_baileys', 'creds.json');
-                if (fs.existsSync(credsPath)) {
-                    const parsed = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-                    credsRegistered = !!parsed?.registered;
-                }
-            }
-        } catch (_) {}
-
-        if (!credsRegistered) {
-            console.log('ℹ️  Session exists but not registered — skipping auto-reconnect (needs fresh pairing)');
+        // Verify creds are registered before auto-connecting
+        const credsPath = path.join(AUTH_DIR, 'creds.json');
+        if (!fs.existsSync(credsPath)) {
+            console.log('ℹ️  No creds.json found — skipping auto-reconnect');
+            return;
+        }
+        const parsed = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+        if (!parsed?.registered) {
+            console.log('ℹ️  Session exists but not registered — skipping auto-reconnect');
             return;
         }
 
         console.log(`🔄 Auto-reconnecting WhatsApp for ${phoneNumber}...`);
         connectionStatus = 'reconnecting';
         io.emit('status_update', { status: 'reconnecting', phone: phoneNumber });
-
         await connectToWhatsApp(phoneNumber, 'auto-reconnect');
     } catch (e) {
         console.error('❌ Auto-reconnect failed:', e.message);
@@ -721,27 +562,25 @@ async function autoReconnect() {
     }
 }
 
-connectMongo().then(async () => {
-    await restoreSessionFromEnv();
-    server.listen(PORT, async () => {
-        console.log(`🔥 WhatsApp Crash Suite v4.0 running on port ${PORT}`);
-        console.log(`💀 ${VECTORS.length} crash vectors | MongoDB: ${mongoReady ? '✅' : '❌ (set MONGO_URL)'}`);
-        // Small delay so socket.io is ready before emitting events
-        setTimeout(autoReconnect, 2000);
+// ── Boot ──────────────────────────────────────────────────────────────────────
+restoreSessionFromEnv();
+server.listen(PORT, async () => {
+    console.log(`🔥 WhatsApp Crash Suite v4.0 running on port ${PORT}`);
+    console.log(`💀 ${VECTORS.length} crash vectors | Storage: JSON files (no MongoDB)`);
+    setTimeout(autoReconnect, 2000);
 
-        // ── Heroku dyno keep-alive: ping self every 25 min so dyno doesn't sleep ──
-        const SELF_URL = process.env.HEROKU_APP_NAME
-            ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
-            : null;
-        if (SELF_URL) {
-            const _https = require('https');
-            setInterval(() => {
-                _https.get(`${SELF_URL}/api/session`, (res) => {
-                    console.log(`♻️  Keep-alive ping → ${res.statusCode}`);
-                    res.resume();
-                }).on('error', () => {});
-            }, 25 * 60 * 1000); // every 25 minutes
-            console.log(`♻️  Keep-alive configured → ${SELF_URL}`);
-        }
-    });
+    // ── Heroku dyno keep-alive ──
+    const SELF_URL = process.env.HEROKU_APP_NAME
+        ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
+        : null;
+    if (SELF_URL) {
+        const _https = require('https');
+        setInterval(() => {
+            _https.get(`${SELF_URL}/api/status`, (res) => {
+                console.log(`♻️  Keep-alive ping → ${res.statusCode}`);
+                res.resume();
+            }).on('error', () => {});
+        }, 25 * 60 * 1000);
+        console.log(`♻️  Keep-alive configured → ${SELF_URL}`);
+    }
 });
