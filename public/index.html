@@ -254,7 +254,7 @@
         </div>
     </div>
 
-    <!-- Saved Numbers (MongoDB) -->
+    <!-- Saved Numbers -->
     <div class="section" id="numbersSection">
         <div class="section-title">
             📱 Saved Numbers
@@ -944,7 +944,7 @@
                 const list   = document.getElementById('numbersList');
                 const badge  = document.getElementById('numbersBadge');
                 if (!r.success) {
-                    list.innerHTML = `<span style="color:#e74c3c;">⚠️ ${r.message || 'MongoDB not connected'}</span>`;
+                    list.innerHTML = `<span style="color:#e74c3c;">⚠️ ${r.message || 'Failed to load numbers'}</span>`;
                     return;
                 }
                 const nums = r.numbers || [];
