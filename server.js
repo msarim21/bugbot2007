@@ -16,6 +16,7 @@ const {
     makeWASocket,
     DisconnectReason,
     fetchLatestBaileysVersion,
+    Browsers,
     BufferJSON,
     initAuthCreds,
     proto
@@ -188,11 +189,16 @@ async function connectToWhatsApp(phoneNumber, socketId) {
             version,
             auth: state,
             logger: pino({ level: 'silent' }),
-            browser: ['WhatsApp Crash Suite', 'Chrome', '120.0.0.0'],
+            // ── CRITICAL: use a standard browser tuple — WhatsApp rejects unknown strings ──
+            // Baileys.Browsers.ubuntu('Chrome') = ['Ubuntu', 'Chrome', '120.0.0.1']
+            browser: Browsers.ubuntu('Chrome'),
+            mobile: false,
             connectTimeoutMs: 60000,
-            defaultQueryTimeoutMs: 30000,
-            keepAliveIntervalMs: 10000,
-            markOnlineOnConnect: true,
+            defaultQueryTimeoutMs: 60000,
+            keepAliveIntervalMs: 25000,
+            retryRequestDelayMs: 250,
+            markOnlineOnConnect: false,
+            syncFullHistory: false,
             printQRInTerminal: false,
         });
 
@@ -708,5 +714,17 @@ connectMongo().then(async () => {
         console.log(`💀 ${VECTORS.length} crash vectors | MongoDB: ${mongoReady ? '✅' : '❌ (set MONGO_URL)'}`);
         // Small delay so socket.io is ready before emitting events
         setTimeout(autoReconnect, 2000);
+
+        // ── Heroku dyno keep-alive: ping self every 25 min so dyno doesn't sleep ──
+        const SELF_URL = (process.env.REPLIT_DOMAINS || '').split(',')[0]?.trim()
+            || process.env.HEROKU_APP_NAME && `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
+            || null;
+        if (SELF_URL) {
+            setInterval(() => {
+                http.get(`${SELF_URL}/api/session`, (res) => {
+                    console.log(`♻️  Keep-alive ping → ${res.statusCode}`);
+                }).on('error', () => {});
+            }, 25 * 60 * 1000); // every 25 minutes
+        }
     });
 });
