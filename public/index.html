@@ -114,40 +114,68 @@
     <!-- Pairing Section -->
     <div class="section">
         <div class="section-title">
-            📱 WhatsApp Pairing
+            📱 WhatsApp Connect
             <span class="badge" id="connectionBadge">Disconnected</span>
         </div>
+
+        <!-- Mode toggle -->
+        <div style="display:flex; gap:8px; margin-bottom:14px;">
+            <button class="btn btn-primary btn-sm mode-btn active" id="modeQR" onclick="setMode('qr')">📷 QR Code (Recommended)</button>
+            <button class="btn btn-outline btn-sm mode-btn" id="modeCode" onclick="setMode('code')">🔑 Pairing Code</button>
+        </div>
+        <div id="modeHint" style="font-size:11px; color:#555; margin-bottom:12px;">
+            📷 <strong style="color:#aaa;">QR Code:</strong> Sabse aasaan — kisi bhi WhatsApp version pe kaam karta hai
+        </div>
+
         <div class="row">
             <div class="input-wrap">
-                <input type="text" id="phoneInput" placeholder="+923001234567" value="">
+                <input type="text" id="phoneInput" placeholder="+923001234567 (apna WhatsApp number)">
             </div>
-            <button class="btn btn-primary" id="pairBtn">🔑 Get Pairing Code</button>
+            <button class="btn btn-primary" id="pairBtn">📷 Scan QR Code</button>
             <button class="btn btn-outline" id="disconnectBtn" style="display:none;">⛔ Disconnect</button>
         </div>
+
+        <!-- QR Display -->
+        <div id="qrDisplay" style="margin-top:16px; display:none;">
+            <div style="text-align:center;">
+                <div style="color:#25d366; font-size:13px; font-weight:600; margin-bottom:12px;">📷 WhatsApp se yeh QR scan karo</div>
+                <div id="qrCanvas" style="display:inline-block; padding:12px; background:#fff; border-radius:12px; box-shadow:0 0 30px rgba(37,211,102,0.2);"></div>
+                <div id="qrTimer" style="margin-top:10px; font-size:12px; color:#f5a623; font-weight:600;"></div>
+            </div>
+            <div style="margin-top:14px; background:rgba(37,211,102,0.05); border:1px solid rgba(37,211,102,0.15); border-radius:12px; padding:14px 16px;">
+                <div style="font-size:12px; font-weight:700; color:#25d366; margin-bottom:10px;">📋 QR scan karne ke steps:</div>
+                <div style="font-size:12px; color:#bbb; line-height:2;">
+                    <div>1️⃣ &nbsp;WhatsApp kholo apne phone pe</div>
+                    <div>2️⃣ &nbsp;<strong style="color:#fff;">Settings ⚙️</strong> → <strong style="color:#fff;">Linked Devices</strong></div>
+                    <div>3️⃣ &nbsp;<strong style="color:#25d366;">Link a Device</strong> dabao</div>
+                    <div>4️⃣ &nbsp;Camera se <strong style="color:#25d366;">upar wala QR code scan karo</strong> ✅</div>
+                </div>
+                <div style="margin-top:8px; font-size:11px; color:#555;">QR ~20 seconds mein badalta hai — scan karte waqt fresh wala use karo</div>
+            </div>
+        </div>
+
+        <!-- Pairing Code Display -->
         <div id="pairingDisplay" style="margin-top:16px; display:none;">
             <div style="text-align:center;">
                 <div style="color:#aaa; font-size:13px; margin-bottom:8px;">📲 Yeh code WhatsApp mein enter karo</div>
                 <div class="pairing-code" id="pairingCodeDisplay">------</div>
                 <div id="pairingTimer" style="margin-top:6px; font-size:12px; color:#f5a623; font-weight:600;"></div>
             </div>
-            <!-- Step-by-step WhatsApp instructions -->
             <div style="margin-top:14px; background:rgba(37,211,102,0.05); border:1px solid rgba(37,211,102,0.15); border-radius:12px; padding:14px 16px;">
-                <div style="font-size:12px; font-weight:700; color:#25d366; margin-bottom:10px;">📋 WhatsApp mein yeh steps karo:</div>
+                <div style="font-size:12px; font-weight:700; color:#25d366; margin-bottom:10px;">📋 Code enter karne ke steps:</div>
                 <div style="font-size:12px; color:#bbb; line-height:1.9;">
-                    <div>1️⃣ &nbsp;WhatsApp kholo (apne phone pe)</div>
-                    <div>2️⃣ &nbsp;<strong style="color:#fff;">Settings (⚙️)</strong> → <strong style="color:#fff;">Linked Devices</strong></div>
+                    <div>1️⃣ &nbsp;WhatsApp kholo</div>
+                    <div>2️⃣ &nbsp;<strong style="color:#fff;">Settings ⚙️ → Linked Devices</strong></div>
                     <div>3️⃣ &nbsp;<strong style="color:#fff;">Link a Device</strong> dabao</div>
-                    <div>4️⃣ &nbsp;Camera screen pe <strong style="color:#25d366;">neeche dekho</strong> → <strong style="color:#25d366;">"Link with phone number instead"</strong> dabao</div>
-                    <div>5️⃣ &nbsp;Upar wala <strong style="color:#fff;">8-letter code</strong> type karo</div>
+                    <div>4️⃣ &nbsp;Camera screen pe <strong style="color:#25d366;">bilkul NEECHE</strong> → <strong style="color:#25d366;">"Link with phone number instead"</strong> dabao</div>
+                    <div>5️⃣ &nbsp;Upar wala 8-letter code type karo</div>
                 </div>
-                <div style="margin-top:10px; padding:8px 10px; background:rgba(245,166,35,0.08); border-radius:8px; font-size:11px; color:#f5a623;">
-                    ⚠️ <strong>"Link with phone number instead"</strong> button camera screen ke bilkul <strong>neeche</strong> hota hai — scroll karo agar nazar na aaye
-                </div>
-                <div style="margin-top:8px; font-size:11px; color:#555;">
-                    ⏱️ Code ~3 minute mein expire hota hai — jaldi karo
+                <div style="margin-top:8px; padding:8px 10px; background:rgba(245,166,35,0.08); border-radius:8px; font-size:11px; color:#f5a623;">
+                    ⚠️ Agar option nazar nahi aata → WhatsApp update karo ya QR Code mode use karo
                 </div>
             </div>
         </div>
+
         <div id="connectionStatus" style="margin-top:10px; font-size:14px; color:#888; text-align:center;"></div>
     </div>
 
@@ -279,9 +307,9 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
 (function() {
-    // Socket.io — auto-reconnect + Heroku compatible transports
     const socket = io({
         reconnection: true,
         reconnectionAttempts: Infinity,
@@ -291,7 +319,62 @@
         transports: ['websocket', 'polling']
     });
 
-    // Countdown timer for pairing code
+    // ── Mode toggle ─────────────────────────────────────────────
+    let currentMode = 'qr';
+    window.setMode = function(mode) {
+        currentMode = mode;
+        document.getElementById('modeQR').className   = 'btn btn-sm mode-btn ' + (mode==='qr'   ? 'btn-primary' : 'btn-outline');
+        document.getElementById('modeCode').className = 'btn btn-sm mode-btn ' + (mode==='code' ? 'btn-primary' : 'btn-outline');
+        document.getElementById('modeHint').innerHTML = mode === 'qr'
+            ? '📷 <strong style="color:#aaa;">QR Code:</strong> Sabse aasaan — kisi bhi WhatsApp version pe kaam karta hai'
+            : '🔑 <strong style="color:#aaa;">Pairing Code:</strong> Sirf newer WhatsApp versions pe kaam karta hai (2.22+)';
+        dom.pairBtn.textContent = mode === 'qr' ? '📷 Generate QR Code' : '🔑 Get Pairing Code';
+    };
+
+    // ── QR Code renderer ────────────────────────────────────────
+    let qrInstance = null;
+    let qrTimerInterval = null;
+
+    function renderQR(qrString) {
+        const container = document.getElementById('qrCanvas');
+        container.innerHTML = '';
+        try {
+            qrInstance = new QRCode(container, {
+                text: qrString,
+                width: 220, height: 220,
+                colorDark: '#000000', colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        } catch(e) {
+            container.innerHTML = '<div style="color:#e74c3c;font-size:12px;">QR render error</div>';
+        }
+        document.getElementById('qrDisplay').style.display = 'block';
+        document.getElementById('pairingDisplay').style.display = 'none';
+        // QR refreshes every ~20s from server
+        startQRTimer(20);
+    }
+
+    function startQRTimer(seconds) {
+        clearInterval(qrTimerInterval);
+        let remaining = seconds;
+        const el = document.getElementById('qrTimer');
+        const tick = () => {
+            if (!el) return;
+            if (remaining <= 0) {
+                el.textContent = '🔄 Naya QR aa raha hai...';
+                el.style.color = '#f5a623';
+                clearInterval(qrTimerInterval);
+                return;
+            }
+            el.textContent = `⏱️ QR refresh hoga: ${remaining}s`;
+            el.style.color = remaining < 8 ? '#e74c3c' : '#888';
+            remaining--;
+        };
+        tick();
+        qrTimerInterval = setInterval(tick, 1000);
+    }
+
+    // ── Pairing code countdown ───────────────────────────────────
     let pairingTimerInterval = null;
     function startPairingCountdown(seconds) {
         clearInterval(pairingTimerInterval);
@@ -307,7 +390,7 @@
             }
             const m = Math.floor(remaining / 60);
             const s = remaining % 60;
-            timerEl.textContent = `⏱️ Code expire hoga: ${m}:${s.toString().padStart(2,'0')}`;
+            timerEl.textContent = `⏱️ Expire: ${m}:${s.toString().padStart(2,'0')}`;
             timerEl.style.color = remaining < 30 ? '#e74c3c' : '#f5a623';
             remaining--;
         }
@@ -491,17 +574,30 @@
     // SOCKET EVENTS
     // ============================================================
 
+    // ── QR Code event (server emits when Baileys generates QR) ──────
+    socket.on('qr_code', (data) => {
+        if (data.qr) {
+            renderQR(data.qr);
+            dom.pairBtn.innerHTML = '📷 Generate QR Code';
+            dom.pairBtn.disabled = false;
+            dom.connectionStatus.textContent = '📷 QR ready — phone se scan karo!';
+            dom.connectionStatus.style.color = '#25d366';
+            addLog('📷 QR Code generated — scan karo', 'info');
+        }
+    });
+
     socket.on('pairing_code', (data) => {
         if (data.code) {
             dom.pairingCodeDisplay.textContent = data.code;
+            document.getElementById('qrDisplay').style.display = 'none';
             dom.pairingDisplay.style.display = 'block';
-            dom.connectionStatus.textContent = `✅ Code ready — WhatsApp mein enter karo (step 4 neeche dekho)`;
+            dom.connectionStatus.textContent = `✅ Code ready — WhatsApp mein enter karo`;
             dom.connectionStatus.style.color = '#f5a623';
             dom.pairBtn.innerHTML = '🔑 Get Pairing Code';
             dom.pairBtn.disabled = false;
-            startPairingCountdown(160); // ~2m 40s before WhatsApp expires it
+            startPairingCountdown(160);
             addLog(`📱 Pairing code: ${data.code} — ab WhatsApp mein enter karo`, 'info');
-            showToast(`📱 Code: ${data.code} — WhatsApp Settings → Linked Devices → Link a Device`, 'info', 12000);
+            showToast(`📱 Code: ${data.code} — WhatsApp → Settings → Linked Devices → Link a Device`, 'info', 12000);
         }
     });
 
@@ -511,16 +607,23 @@
             state.connected = true;
             dom.connectionStatus.textContent = `✅ Connected as ${data.phone || ''}`;
             dom.connectionStatus.style.color = '#25d366';
+            document.getElementById('qrDisplay').style.display = 'none';
             dom.pairingDisplay.style.display = 'none';
+            clearInterval(qrTimerInterval);
+            clearInterval(pairingTimerInterval);
             dom.targetInput.disabled = false;
             dom.setTargetBtn.disabled = false;
             updateUI();
             addLog('✅ WhatsApp connected!', 'success');
-            showToast('✅ Connected to WhatsApp!', 'success');
+            showToast('✅ WhatsApp connected!', 'success');
             loadMetrics();
+        } else if (data.status === 'qr') {
+            dom.connectionStatus.textContent = '⏳ QR generate ho raha hai...';
+            dom.connectionStatus.style.color = '#f5a623';
         } else if (data.status === 'pairing') {
             if (data.pairingCode) {
                 dom.pairingCodeDisplay.textContent = data.pairingCode;
+                document.getElementById('qrDisplay').style.display = 'none';
                 dom.pairingDisplay.style.display = 'block';
                 dom.connectionStatus.textContent = `✅ Code ready — WhatsApp mein enter karo`;
                 dom.connectionStatus.style.color = '#f5a623';
@@ -531,6 +634,7 @@
             state.connected = false;
             dom.connectionStatus.textContent = `🔄 Auto-connecting${data.phone ? ' (' + data.phone + ')' : ''}...`;
             dom.connectionStatus.style.color = '#f5a623';
+            document.getElementById('qrDisplay').style.display = 'none';
             dom.pairingDisplay.style.display = 'none';
             dom.pairBtn.innerHTML = '🔄 Auto-connecting...';
             dom.pairBtn.disabled = true;
@@ -539,10 +643,11 @@
             state.connected = false;
             dom.connectionStatus.textContent = '⏳ Disconnected';
             dom.connectionStatus.style.color = '#888';
+            document.getElementById('qrDisplay').style.display = 'none';
             dom.pairingDisplay.style.display = 'none';
             dom.targetInput.disabled = true;
             dom.setTargetBtn.disabled = true;
-            dom.pairBtn.innerHTML = '🔑 Get Pairing Code';
+            dom.pairBtn.innerHTML = currentMode === 'qr' ? '📷 Generate QR Code' : '🔑 Get Pairing Code';
             dom.pairBtn.disabled = false;
             updateUI();
         }
@@ -660,34 +765,37 @@
     async function handlePair() {
         const phone = dom.phoneInput.value.trim();
         if (!phone) {
-            showToast('⚠️ Enter your WhatsApp number', 'warning');
+            showToast('⚠️ Apna WhatsApp number enter karo', 'warning');
             return;
         }
-        // Validate format
         if (!phone.match(/^\+?[0-9]{10,15}$/)) {
-            showToast('⚠️ Invalid phone number format. Use +923001234567', 'warning');
+            showToast('⚠️ Format galat hai — use karo: +923001234567', 'warning');
             return;
         }
         dom.pairBtn.disabled = true;
-        dom.pairBtn.innerHTML = '<span class="spinner"></span> Generating...';
-        dom.connectionStatus.textContent = '⏳ Generating pairing code...';
+        dom.pairBtn.innerHTML = '<span class="spinner"></span> Connecting...';
+        dom.connectionStatus.textContent = currentMode === 'qr' ? '⏳ QR generate ho raha hai...' : '⏳ Pairing code generate ho raha hai...';
         dom.connectionStatus.style.color = '#f5a623';
+        document.getElementById('qrDisplay').style.display = 'none';
         dom.pairingDisplay.style.display = 'none';
-        // Emit socket event to pair
-        socket.emit('pair', { phoneNumber: phone });
-        // Also start polling for code (fallback)
-        setTimeout(pollPairingCode, 3000);
-        setTimeout(pollPairingCode, 6000);
-        // Fix 4: Timeout cancels zombie backend connection too
+
+        // Send mode to server
+        socket.emit('pair', { phoneNumber: phone, mode: currentMode });
+
+        if (currentMode === 'code') {
+            setTimeout(pollPairingCode, 3000);
+            setTimeout(pollPairingCode, 6000);
+        }
+
         setTimeout(() => {
-            if (dom.pairBtn.innerHTML.includes('Generating')) {
+            if (dom.pairBtn.innerHTML.includes('Connecting')) {
                 socket.emit('cancel_pair');
-                dom.pairBtn.innerHTML = '🔑 Get Pairing Code';
+                dom.pairBtn.innerHTML = currentMode === 'qr' ? '📷 Generate QR Code' : '🔑 Get Pairing Code';
                 dom.pairBtn.disabled = false;
-                dom.connectionStatus.textContent = '⏳ Timeout — try again.';
+                dom.connectionStatus.textContent = '⏳ Timeout — dobara try karo';
                 dom.connectionStatus.style.color = '#e74c3c';
             }
-        }, 15000);
+        }, 20000);
     }
 
     async function handleDisconnect() {
