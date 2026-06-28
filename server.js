@@ -115,6 +115,8 @@ async function useMongoAuthState() {
 
 let sock              = null;
 let isConnected       = false;
+let isPairing         = false;  // true while waiting for user to enter code — blocks reconnect loop
+let wasConnected      = false;  // true only after a real 'open' — gates reconnect on drop
 let currentPairingCode = null;
 let currentPhoneNumber = null;
 let connectionStatus  = 'offline';
@@ -201,11 +203,16 @@ async function connectToWhatsApp(phoneNumber, socketId) {
             console.log('🔔 Connection update:', { connection });
 
             if (connection === 'close') {
-                const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-                console.log('⚠️  Connection closed. Reconnect:', shouldReconnect);
-                isConnected = false;
-                connectionStatus = 'offline';
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const loggedOut  = statusCode === DisconnectReason.loggedOut;
+                const hadSession = wasConnected; // snapshot before clearing
+                console.log(`⚠️  Connection closed | wasConnected:${hadSession} | isPairing:${isPairing} | loggedOut:${loggedOut}`);
+
+                isConnected        = false;
+                isPairing          = false;
+                wasConnected       = false;
                 currentPairingCode = null;
+                connectionStatus   = 'offline';
                 io.emit('status_update', { status: 'disconnected' });
 
                 // Update number status in DB
@@ -216,13 +223,22 @@ async function connectToWhatsApp(phoneNumber, socketId) {
                     ).catch(() => {});
                 }
 
-                if (shouldReconnect) {
+                // ── KEY FIX: only reconnect if session was fully established before drop ──
+                // During pairing (isPairing was true / hadSession false) — NEVER reconnect.
+                // A new reconnect generates a new pairing code, invalidating the current one
+                // and causing "Couldn't link device" on WhatsApp.
+                if (!loggedOut && hadSession) {
+                    console.log('🔄 Re-connecting established session in 5s...');
                     setTimeout(() => connectToWhatsApp(phoneNumber, socketId), 5000);
+                } else if (!hadSession) {
+                    console.log('ℹ️  Drop during pairing — not reconnecting. User must retry.');
                 }
             } else if (connection === 'open') {
                 console.log('✅ WhatsApp Connected!');
-                isConnected       = true;
-                connectionStatus  = 'connected';
+                isConnected        = true;
+                wasConnected       = true;
+                isPairing          = false;
+                connectionStatus   = 'connected';
                 currentPairingCode = null;
                 currentPhoneNumber = phoneNumber;
                 io.emit('status_update', { status: 'connected', phone: phoneNumber });
@@ -260,6 +276,7 @@ async function connectToWhatsApp(phoneNumber, socketId) {
 
         // Request pairing code if not yet registered
         if (!state.creds.registered) {
+            isPairing        = true;
             connectionStatus = 'pairing';
             // Wait for WebSocket to be fully open before requesting pairing code
             await new Promise((resolve) => {
@@ -267,15 +284,16 @@ async function connectToWhatsApp(phoneNumber, socketId) {
                     resolve();
                 } else if (sock.ws) {
                     sock.ws.once('open', resolve);
-                    setTimeout(resolve, 5000); // fallback timeout
+                    setTimeout(resolve, 8000); // fallback timeout
                 } else {
-                    setTimeout(resolve, 5000);
+                    setTimeout(resolve, 8000);
                 }
             });
-            await new Promise(r => setTimeout(r, 1500)); // small buffer after open
+            await new Promise(r => setTimeout(r, 2000)); // buffer after open
             const code = await sock.requestPairingCode(cleanNumber);
             if (!code) throw new Error('Pairing code not received from WhatsApp — try again');
             currentPairingCode = code;
+            isPairing          = true; // keep true until user enters code and connection opens
             console.log(`📱 Pairing Code: ${code}`);
             io.emit('pairing_code', { code });
             io.emit('status_update', { status: 'pairing', pairingCode: code });
@@ -283,6 +301,7 @@ async function connectToWhatsApp(phoneNumber, socketId) {
 
         return { success: true, pairingCode: currentPairingCode };
     } catch (error) {
+        isPairing = false;
         console.error('❌ Connection error:', error.message);
         throw error;
     }
@@ -378,11 +397,19 @@ io.on('connection', (socket) => {
     socket.on('pair', async (data) => {
         const { phoneNumber } = data;
         if (!phoneNumber) { socket.emit('error', { message: 'Phone number required' }); return; }
+        // Prevent concurrent pairing attempts — one at a time
+        if (isPairing) {
+            socket.emit('error', { message: 'Pairing already in progress — please wait or enter the current code' });
+            return;
+        }
         try {
             if (sock) {
                 try { sock.end(); } catch (_) {}
-                sock = null; isConnected = false; currentPairingCode = null; connectionStatus = 'offline';
+                sock = null;
             }
+            isConnected = false; wasConnected = false; isPairing = false;
+            currentPairingCode = null; connectionStatus = 'offline';
+
             // Clear stale auth state so fresh pairing always works
             if (mongoReady) {
                 await AuthKey.deleteMany({}).catch(() => {});
@@ -396,6 +423,7 @@ io.on('connection', (socket) => {
             await connectToWhatsApp(phoneNumber, socket.id);
             socket.emit('status_update', { status: 'pairing', pairingCode: currentPairingCode });
         } catch (error) {
+            isPairing = false;
             socket.emit('error', { message: error.message });
         }
     });
@@ -634,6 +662,32 @@ async function autoReconnect() {
         }
 
         if (!phoneNumber) return;
+
+        // ── CRITICAL: verify session is actually registered before auto-connecting ──
+        // If creds are not registered, auto-connect will request a pairing code
+        // silently in the background — conflicting with any user-initiated pairing.
+        let credsRegistered = false;
+        try {
+            if (mongoReady) {
+                const credsDoc = await AuthKey.findOne({ _id: 'creds' }).lean();
+                if (credsDoc) {
+                    const parsed = JSON.parse(credsDoc.data);
+                    credsRegistered = !!parsed?.registered;
+                }
+            } else {
+                const fs = require('fs');
+                const credsPath = require('path').join('auth_info_baileys', 'creds.json');
+                if (fs.existsSync(credsPath)) {
+                    const parsed = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+                    credsRegistered = !!parsed?.registered;
+                }
+            }
+        } catch (_) {}
+
+        if (!credsRegistered) {
+            console.log('ℹ️  Session exists but not registered — skipping auto-reconnect (needs fresh pairing)');
+            return;
+        }
 
         console.log(`🔄 Auto-reconnecting WhatsApp for ${phoneNumber}...`);
         connectionStatus = 'reconnecting';
