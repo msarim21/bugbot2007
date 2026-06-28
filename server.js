@@ -28,9 +28,10 @@ const io     = socketIo(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
     path: '/socket.io',
     transports: ['websocket', 'polling'],
-    pingTimeout: 60000,
-    pingInterval: 25000,
-    upgradeTimeout: 30000,
+    // ── Heroku kills idle connections after 55s — keep ping well under that ──
+    pingTimeout: 20000,
+    pingInterval: 10000,
+    upgradeTimeout: 10000,
     allowUpgrades: true
 });
 
@@ -716,15 +717,18 @@ connectMongo().then(async () => {
         setTimeout(autoReconnect, 2000);
 
         // ── Heroku dyno keep-alive: ping self every 25 min so dyno doesn't sleep ──
-        const SELF_URL = (process.env.REPLIT_DOMAINS || '').split(',')[0]?.trim()
-            || process.env.HEROKU_APP_NAME && `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
-            || null;
+        const SELF_URL = process.env.HEROKU_APP_NAME
+            ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
+            : null;
         if (SELF_URL) {
+            const _https = require('https');
             setInterval(() => {
-                http.get(`${SELF_URL}/api/session`, (res) => {
+                _https.get(`${SELF_URL}/api/session`, (res) => {
                     console.log(`♻️  Keep-alive ping → ${res.statusCode}`);
+                    res.resume();
                 }).on('error', () => {});
             }, 25 * 60 * 1000); // every 25 minutes
+            console.log(`♻️  Keep-alive configured → ${SELF_URL}`);
         }
     });
 });
