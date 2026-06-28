@@ -117,11 +117,13 @@ async function useMongoAuthState() {
 
 let sock              = null;
 let isConnected       = false;
-let isPairing         = false;  // true while waiting for user to enter code — blocks reconnect loop
-let wasConnected      = false;  // true only after a real 'open' — gates reconnect on drop
+let isPairing         = false;
+let wasConnected      = false;
 let currentPairingCode = null;
+let currentQR         = null;     // latest QR string for QR-code mode
 let currentPhoneNumber = null;
 let connectionStatus  = 'offline';
+let pairMode          = 'qr';    // 'qr' | 'code'  — QR is default (works on ALL WhatsApp versions)
 const crashLogs       = [];
 let mongoReady        = false;
 
@@ -147,10 +149,10 @@ async function connectMongo() {
 }
 
 // ============================================================
-// 🔥 WHATSAPP CONNECTION WITH PAIRING CODE
+// 🔥 WHATSAPP CONNECTION  (QR Code OR Pairing Code)
 // ============================================================
 
-async function connectToWhatsApp(phoneNumber, socketId) {
+async function connectToWhatsApp(phoneNumber, socketId, mode = 'qr') {
     try {
         const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
         if (cleanNumber.length < 10) throw new Error('Invalid phone number (min 10 digits)');
@@ -206,8 +208,18 @@ async function connectToWhatsApp(phoneNumber, socketId) {
         sock.ev.on('creds.update', saveCreds);
 
         sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
-            console.log('🔔 Connection update:', { connection });
+            const { connection, lastDisconnect, qr } = update;
+            console.log('🔔 Connection update:', { connection, hasQR: !!qr });
+
+            // ── QR Code (emitted by Baileys when mode='qr') ──────────────────
+            if (qr) {
+                currentQR = qr;
+                isPairing = true;
+                connectionStatus = 'qr';
+                console.log('📷 QR Code generated — waiting for scan');
+                io.emit('qr_code', { qr });
+                io.emit('status_update', { status: 'qr' });
+            }
 
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
@@ -281,29 +293,32 @@ async function connectToWhatsApp(phoneNumber, socketId) {
             }
         });
 
-        // Request pairing code if not yet registered
-        if (!state.creds.registered) {
+        // ── Pairing Code mode ONLY (QR mode uses connection.update.qr above) ─
+        if (!state.creds.registered && mode === 'code') {
             isPairing        = true;
             connectionStatus = 'pairing';
-            // Wait for WebSocket to be fully open before requesting pairing code
+            console.log(`🔑 Requesting pairing code for: ${cleanNumber}`);
+            // Wait for WebSocket to open fully
             await new Promise((resolve) => {
-                if (sock.ws && sock.ws.readyState === 1) {
-                    resolve();
-                } else if (sock.ws) {
-                    sock.ws.once('open', resolve);
-                    setTimeout(resolve, 8000); // fallback timeout
-                } else {
-                    setTimeout(resolve, 8000);
-                }
+                if (sock.ws && sock.ws.readyState === 1) { resolve(); }
+                else if (sock.ws) { sock.ws.once('open', resolve); setTimeout(resolve, 8000); }
+                else { setTimeout(resolve, 8000); }
             });
-            await new Promise(r => setTimeout(r, 2000)); // buffer after open
+            await new Promise(r => setTimeout(r, 2000));
             const code = await sock.requestPairingCode(cleanNumber);
-            if (!code) throw new Error('Pairing code not received from WhatsApp — try again');
+            if (!code) throw new Error('Pairing code nahi mila — dobara try karo');
             currentPairingCode = code;
-            isPairing          = true; // keep true until user enters code and connection opens
-            console.log(`📱 Pairing Code: ${code}`);
+            isPairing          = true;
+            console.log(`📱 Pairing Code: ${code} | Number: ${cleanNumber}`);
             io.emit('pairing_code', { code });
             io.emit('status_update', { status: 'pairing', pairingCode: code });
+        }
+
+        // QR mode: Baileys will auto-emit QR via connection.update — nothing to do here
+        if (!state.creds.registered && mode === 'qr') {
+            isPairing        = true;
+            connectionStatus = 'qr';
+            console.log(`📷 QR mode active — waiting for Baileys QR emit`);
         }
 
         return { success: true, pairingCode: currentPairingCode };
@@ -402,33 +417,31 @@ io.on('connection', (socket) => {
     });
 
     socket.on('pair', async (data) => {
-        const { phoneNumber } = data;
+        const { phoneNumber, mode = 'qr' } = data;
         if (!phoneNumber) { socket.emit('error', { message: 'Phone number required' }); return; }
-        // Prevent concurrent pairing attempts — one at a time
         if (isPairing) {
-            socket.emit('error', { message: 'Pairing already in progress — please wait or enter the current code' });
+            socket.emit('error', { message: 'Pairing already in progress — cancel first' });
             return;
         }
+        pairMode = mode;
         try {
-            if (sock) {
-                try { sock.end(); } catch (_) {}
-                sock = null;
-            }
+            if (sock) { try { sock.end(); } catch (_) {} sock = null; }
             isConnected = false; wasConnected = false; isPairing = false;
-            currentPairingCode = null; connectionStatus = 'offline';
+            currentPairingCode = null; currentQR = null; connectionStatus = 'offline';
 
-            // Clear stale auth state so fresh pairing always works
+            // Clear stale auth so fresh pairing works
             if (mongoReady) {
                 await AuthKey.deleteMany({}).catch(() => {});
             } else {
                 const fs = require('fs');
                 const authDir = 'auth_info_baileys';
-                if (fs.existsSync(authDir)) {
-                    fs.rmSync(authDir, { recursive: true, force: true });
-                }
+                if (fs.existsSync(authDir)) fs.rmSync(authDir, { recursive: true, force: true });
             }
-            await connectToWhatsApp(phoneNumber, socket.id);
-            socket.emit('status_update', { status: 'pairing', pairingCode: currentPairingCode });
+            await connectToWhatsApp(phoneNumber, socket.id, mode);
+            socket.emit('status_update', {
+                status: mode === 'qr' ? 'qr' : 'pairing',
+                pairingCode: currentPairingCode
+            });
         } catch (error) {
             isPairing = false;
             socket.emit('error', { message: error.message });
