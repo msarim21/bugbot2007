@@ -124,10 +124,29 @@
             <button class="btn btn-primary" id="pairBtn">🔑 Get Pairing Code</button>
             <button class="btn btn-outline" id="disconnectBtn" style="display:none;">⛔ Disconnect</button>
         </div>
-        <div id="pairingDisplay" style="margin-top:16px; text-align:center; display:none;">
-            <div style="color:#888; font-size:14px;">📲 Enter this code in WhatsApp</div>
-            <div class="pairing-code" id="pairingCodeDisplay">------</div>
-            <div style="margin-top:8px; color:#555; font-size:12px;">Open WhatsApp → Settings → Linked Devices → Link with Phone Number</div>
+        <div id="pairingDisplay" style="margin-top:16px; display:none;">
+            <div style="text-align:center;">
+                <div style="color:#aaa; font-size:13px; margin-bottom:8px;">📲 Yeh code WhatsApp mein enter karo</div>
+                <div class="pairing-code" id="pairingCodeDisplay">------</div>
+                <div id="pairingTimer" style="margin-top:6px; font-size:12px; color:#f5a623; font-weight:600;"></div>
+            </div>
+            <!-- Step-by-step WhatsApp instructions -->
+            <div style="margin-top:14px; background:rgba(37,211,102,0.05); border:1px solid rgba(37,211,102,0.15); border-radius:12px; padding:14px 16px;">
+                <div style="font-size:12px; font-weight:700; color:#25d366; margin-bottom:10px;">📋 WhatsApp mein yeh steps karo:</div>
+                <div style="font-size:12px; color:#bbb; line-height:1.9;">
+                    <div>1️⃣ &nbsp;WhatsApp kholo (apne phone pe)</div>
+                    <div>2️⃣ &nbsp;<strong style="color:#fff;">Settings (⚙️)</strong> → <strong style="color:#fff;">Linked Devices</strong></div>
+                    <div>3️⃣ &nbsp;<strong style="color:#fff;">Link a Device</strong> dabao</div>
+                    <div>4️⃣ &nbsp;Camera screen pe <strong style="color:#25d366;">neeche dekho</strong> → <strong style="color:#25d366;">"Link with phone number instead"</strong> dabao</div>
+                    <div>5️⃣ &nbsp;Upar wala <strong style="color:#fff;">8-letter code</strong> type karo</div>
+                </div>
+                <div style="margin-top:10px; padding:8px 10px; background:rgba(245,166,35,0.08); border-radius:8px; font-size:11px; color:#f5a623;">
+                    ⚠️ <strong>"Link with phone number instead"</strong> button camera screen ke bilkul <strong>neeche</strong> hota hai — scroll karo agar nazar na aaye
+                </div>
+                <div style="margin-top:8px; font-size:11px; color:#555;">
+                    ⏱️ Code ~3 minute mein expire hota hai — jaldi karo
+                </div>
+            </div>
         </div>
         <div id="connectionStatus" style="margin-top:10px; font-size:14px; color:#888; text-align:center;"></div>
     </div>
@@ -262,14 +281,39 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (function() {
-    // Fix 3: Auto-reconnect — socket reconnects if server restarts, no page refresh needed
+    // Socket.io — auto-reconnect + Heroku compatible transports
     const socket = io({
         reconnection: true,
         reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 20000
+        reconnectionDelay: 1500,
+        reconnectionDelayMax: 8000,
+        timeout: 20000,
+        transports: ['websocket', 'polling']
     });
+
+    // Countdown timer for pairing code
+    let pairingTimerInterval = null;
+    function startPairingCountdown(seconds) {
+        clearInterval(pairingTimerInterval);
+        let remaining = seconds;
+        const timerEl = document.getElementById('pairingTimer');
+        function tick() {
+            if (!timerEl) return;
+            if (remaining <= 0) {
+                timerEl.textContent = '⌛ Code expire ho gaya — dobara generate karo';
+                timerEl.style.color = '#e74c3c';
+                clearInterval(pairingTimerInterval);
+                return;
+            }
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            timerEl.textContent = `⏱️ Code expire hoga: ${m}:${s.toString().padStart(2,'0')}`;
+            timerEl.style.color = remaining < 30 ? '#e74c3c' : '#f5a623';
+            remaining--;
+        }
+        tick();
+        pairingTimerInterval = setInterval(tick, 1000);
+    }
 
     // ============================================================
     // STATE
@@ -451,13 +495,13 @@
         if (data.code) {
             dom.pairingCodeDisplay.textContent = data.code;
             dom.pairingDisplay.style.display = 'block';
-            dom.connectionStatus.textContent = `📱 Code: ${data.code} — Enter in WhatsApp`;
+            dom.connectionStatus.textContent = `✅ Code ready — WhatsApp mein enter karo (step 4 neeche dekho)`;
             dom.connectionStatus.style.color = '#f5a623';
-            // Reset button so user can re-pair if needed
             dom.pairBtn.innerHTML = '🔑 Get Pairing Code';
             dom.pairBtn.disabled = false;
-            addLog(`📱 Pairing code generated: ${data.code}`, 'info');
-            showToast(`📱 Code: ${data.code}`, 'info', 8000);
+            startPairingCountdown(160); // ~2m 40s before WhatsApp expires it
+            addLog(`📱 Pairing code: ${data.code} — ab WhatsApp mein enter karo`, 'info');
+            showToast(`📱 Code: ${data.code} — WhatsApp Settings → Linked Devices → Link a Device`, 'info', 12000);
         }
     });
 
@@ -478,8 +522,9 @@
             if (data.pairingCode) {
                 dom.pairingCodeDisplay.textContent = data.pairingCode;
                 dom.pairingDisplay.style.display = 'block';
-                dom.connectionStatus.textContent = `📱 Code: ${data.pairingCode} — Enter in WhatsApp`;
+                dom.connectionStatus.textContent = `✅ Code ready — WhatsApp mein enter karo`;
                 dom.connectionStatus.style.color = '#f5a623';
+                startPairingCountdown(160);
                 addLog(`📱 Pairing code: ${data.pairingCode}`, 'info');
             }
         } else if (data.status === 'reconnecting') {
