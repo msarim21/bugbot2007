@@ -7,9 +7,13 @@
     "NODE_ENV": {
       "value": "production"
     },
-    "MONGO_URL": {
-      "description": "MongoDB connection string (e.g. mongodb+srv://user:pass@cluster.mongodb.net/dbname) — required for session persistence across restarts",
-      "required": true
+    "HEROKU_APP_NAME": {
+      "description": "Your Heroku app name (e.g. my-crash-suite) — used for keep-alive pings. Find it in your Heroku dashboard.",
+      "required": false
+    },
+    "SESSION_DATA": {
+      "description": "Base64 session backup string — paste from the Session Backup section of the dashboard after first pairing. Prevents re-pairing on every dyno restart.",
+      "required": false
     }
   },
   "buildpacks": [
